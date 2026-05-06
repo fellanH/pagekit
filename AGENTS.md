@@ -41,7 +41,7 @@ Stage 1 is documentation + workspace scaffolding only. The binary materializes i
 This workspace produces a binary that:
 
 - Scaffolds new HTML pages with semantic marker placement (`init`)
-- Detects shared DOM blocks across pages and extracts them to fragments (`extract`)
+- Detects shared DOM blocks across pages and extracts them to `_fragments/` (`extract`)
 - Surfaces HTML-specific health checks (link integrity, framework-export anomalies)
 - Composes the `fragments` primitive for the underlying sync mechanism
 
