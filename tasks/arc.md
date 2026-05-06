@@ -1,10 +1,10 @@
 # pagekit
 
-Stage 1 scaffolding (this commit). Stage 2 (code split from fragments) is next.
+Stages 1, 2, and 3 done. Binary ships, integration suite green (13/13), `extract` runs on `lol_html` for source rewrite.
 
 ## Active arc
 
-Land Stage 2: extract `lib.rs` from fragments, move `init.rs` + `extract.rs` into pagekit, wire CLI.
+Idle. Next move is consumer-driven: wire `pagekit` into the next vanilla-HTML site that needs it (felixhellstrom.com is integrated; ettsmart.se in progress per workspace charter), or pick up Stage 3+ work when a real site surfaces the need.
 
 ## Decisions
 
@@ -13,12 +13,12 @@ Land Stage 2: extract `lib.rs` from fragments, move `init.rs` + `extract.rs` int
 - Opinionated about Felix's stack: vanilla HTML + CSS + Rust + SQLite + CF Pages.
 - No template syntax, no variables, no conditionals — same rationale as fragments.
 - Single binary CLI re-exposes fragments commands + adds pagekit-specific (`init`, `extract`). Agent UX: one binary, one CLI.
+- Stage 3 hybrid: scraper for cross-page detection (multi-pass query), `lol_html` for per-page source rewrite (single-pass streaming). The bridge is sibling-index matching — scraper picks "wrap the Nth `<footer>`", lol_html walks elements by selector and counts to that index. Eliminates `find_first_tag_span` / `find_matching_tag_span` and the source-vs-DOM reconciliation bug class.
 
 ## Backlog
 
-- **Stage 2** — code split: `lib.rs` in fragments exposes core APIs; `init.rs`/`extract.rs` move to pagekit; pagekit binary builds and tests.
-- **Stage 3** — rewrite `extract` on `lol_html`. Cleaner source-rewrite, no scraper attribute-normalization hacks, streaming.
-- **Stage 3+** — framework-export profiles (Webflow, Bootstrap-class), HTML-validity in doctor, link-integrity checks.
+- **Stage 3+** — framework-export profiles (Webflow, Bootstrap-class), HTML-validity in `doctor`, link-integrity checks.
+- **Cleanup (low priority)** — `ExtractCandidate.tag` field is no longer consumed by `extract.rs`; kept in the schema for one cycle for backward compat. Either drop it (breaking config) or move to `Option<String>` with deprecation note.
 
 ## Blocked
 

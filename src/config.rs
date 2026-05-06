@@ -9,7 +9,7 @@ const CONFIG_FILE: &str = "fragments.toml";
 /// HTML-specific options (extract candidates). Both layers parse from the
 /// same `fragments.toml` file via flatten — users see one flat schema,
 /// pagekit internally has two layers.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Config {
     /// Fragments core fields (marker_prefix, fragments_dir, target_dir,
@@ -39,15 +39,6 @@ pub struct ExtractCandidate {
     /// HTML tag name of the element. Used to walk the raw source when
     /// inserting marker pairs.
     pub tag: String,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            core: fragments::Config::default(),
-            extract: ExtractConfig::default(),
-        }
-    }
 }
 
 impl Config {

@@ -1,9 +1,14 @@
 use crate::config::Config;
-use anyhow::{Context, Result};
-use scraper::{Html, Selector};
+use anyhow::{anyhow, Context, Result};
+use lol_html::html_content::{ContentType, Element, EndTag};
+use lol_html::{ElementContentHandlers, HtmlRewriter, Selector as LolSelector, Settings};
+use scraper::{Html, Selector as ScraperSelector};
+use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use walkdir::WalkDir;
 
 /// A DOM block found shared across pages, ready to extract into a fragment.
@@ -13,73 +18,10 @@ struct SharedBlock {
     /// so per-page presence checks use the original selector, not a
     /// hardcoded mapping from tag back to class).
     selector: String,
-    /// HTML tag name (used for raw-source span matching).
-    tag: String,
-    /// Scraper's `.html()` output — the canonical content written to the
-    /// fragment file and compared against on per-page matching.
+    /// scraper's `.html()` output — the canonical content written to the
+    /// fragment file and used to identify the matching element among
+    /// same-selector siblings on a given page.
     content: String,
-}
-
-/// Find the source span of the FIRST top-level `<tag ...>...</tag>` element
-/// in `src`. Returns (start, end) byte offsets. Uses a depth counter to
-/// handle nested same-name tags.
-fn find_first_tag_span(src: &str, tag: &str) -> Option<(usize, usize)> {
-    let open_prefix = format!("<{}", tag);
-    let close_tag = format!("</{}>", tag);
-
-    let start = src.find(&open_prefix)?;
-    let after = src.as_bytes().get(start + open_prefix.len())?;
-    if !matches!(after, b' ' | b'>' | b'/' | b'\n' | b'\r' | b'\t') {
-        return None;
-    }
-
-    let mut depth = 0i32;
-    let haystack = &src[start..];
-
-    let mut idx = 0;
-    while idx < haystack.len() {
-        if haystack[idx..].starts_with(&open_prefix) {
-            let after_idx = idx + open_prefix.len();
-            if after_idx < haystack.len() {
-                let ch = haystack.as_bytes()[after_idx];
-                if matches!(ch, b' ' | b'>' | b'/' | b'\n' | b'\r' | b'\t') {
-                    depth += 1;
-                }
-            }
-            idx += open_prefix.len();
-        } else if haystack[idx..].starts_with(&close_tag) {
-            depth -= 1;
-            if depth == 0 {
-                let end = start + idx + close_tag.len();
-                return Some((start, end));
-            }
-            idx += close_tag.len();
-        } else {
-            idx += haystack[idx..].chars().next().map_or(1, |c| c.len_utf8());
-        }
-    }
-    None
-}
-
-/// Find the source span of the top-level `<tag>...</tag>` whose parsed
-/// outer-HTML equals `expected`. Walks every top-level same-tag occurrence.
-fn find_matching_tag_span(src: &str, tag: &str, expected: &str) -> Option<(usize, usize)> {
-    let Ok(sel) = Selector::parse(tag) else {
-        return None;
-    };
-    let mut from = 0;
-    while from < src.len() {
-        let (rel_start, rel_end) = find_first_tag_span(&src[from..], tag)?;
-        let abs_start = from + rel_start;
-        let abs_end = from + rel_end;
-        let candidate = &src[abs_start..abs_end];
-        let frag = Html::parse_fragment(candidate);
-        if frag.select(&sel).any(|el| el.html() == expected) {
-            return Some((abs_start, abs_end));
-        }
-        from = abs_end;
-    }
-    None
 }
 
 fn collect_html_files(
@@ -103,6 +45,100 @@ fn collect_html_files(
         })
         .map(|e| e.into_path())
         .collect()
+}
+
+/// Per-page rewrite: insert `<!-- prefix:name -->...<!-- /prefix:name -->`
+/// markers around the canonical occurrence of every shared block.
+///
+/// scraper picks the *sibling-index* of the matching element (e.g. "wrap
+/// the 2nd `<footer>`"); lol_html walks the source via CSS selector,
+/// counts hits, and wraps the matching index with `before()` + an
+/// `on_end_tag()` `after()`. No source-vs-DOM reconciliation: lol_html
+/// operates on source bytes directly, so attribute order and whitespace
+/// in the original page are preserved verbatim.
+fn rewrite_page(src: &str, blocks: &[SharedBlock], prefix: &str) -> Result<String> {
+    let doc = Html::parse_document(src);
+
+    // Group target sibling-indices by selector. Skip blocks already marked
+    // (idempotent) and blocks whose canonical content isn't present on
+    // this page.
+    let mut by_selector: HashMap<String, Vec<(usize, String)>> = HashMap::new();
+    for block in blocks {
+        let open_marker = format!("<!-- {}:{} -->", prefix, block.name);
+        if src.contains(&open_marker) {
+            continue;
+        }
+        let scraper_sel = match ScraperSelector::parse(&block.selector) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let mut idx_match: Option<usize> = None;
+        for (i, el) in doc.select(&scraper_sel).enumerate() {
+            if el.html() == block.content {
+                idx_match = Some(i);
+                break;
+            }
+        }
+        if let Some(idx) = idx_match {
+            by_selector
+                .entry(block.selector.clone())
+                .or_default()
+                .push((idx, block.name.clone()));
+        }
+    }
+
+    if by_selector.is_empty() {
+        return Ok(src.to_string());
+    }
+
+    let mut handlers: Vec<(Cow<LolSelector>, ElementContentHandlers)> = Vec::new();
+    for (sel_str, targets) in by_selector {
+        let lol_sel: LolSelector = sel_str
+            .parse()
+            .map_err(|e| anyhow!("invalid selector '{}': {:?}", sel_str, e))?;
+        let counter = Rc::new(RefCell::new(0usize));
+        let prefix_owned = prefix.to_string();
+
+        let counter_clone = Rc::clone(&counter);
+        let element_handler = move |el: &mut Element<'_, '_>| -> lol_html::HandlerResult {
+            let i = *counter_clone.borrow();
+            *counter_clone.borrow_mut() += 1;
+            for (target_idx, name) in &targets {
+                if i == *target_idx {
+                    let open = format!("<!-- {}:{} -->\n", prefix_owned, name);
+                    el.before(&open, ContentType::Html);
+                    let close = format!("\n<!-- /{}:{} -->", prefix_owned, name);
+                    el.on_end_tag(Box::new(move |end: &mut EndTag<'_>| {
+                        end.after(&close, ContentType::Html);
+                        Ok(())
+                    }))?;
+                    break;
+                }
+            }
+            Ok(())
+        };
+
+        handlers.push((
+            Cow::Owned(lol_sel),
+            ElementContentHandlers::default().element(element_handler),
+        ));
+    }
+
+    let mut output = Vec::new();
+    {
+        let mut rewriter = HtmlRewriter::new(
+            Settings {
+                element_content_handlers: handlers,
+                ..Settings::new()
+            },
+            |c: &[u8]| output.extend_from_slice(c),
+        );
+        rewriter
+            .write(src.as_bytes())
+            .context("lol_html write failed")?;
+        rewriter.end().context("lol_html end failed")?;
+    }
+    String::from_utf8(output).context("lol_html output was not valid utf-8")
 }
 
 /// Scan HTML files in a site directory, detect shared DOM blocks,
@@ -129,22 +165,25 @@ pub fn extract_fragments(root: &Path, config: &Config) -> Result<usize> {
 
     // Candidate selectors: built-ins + any user-provided. User entries
     // append to defaults — adding one custom doesn't lose the built-ins.
-    let mut candidates: Vec<(String, String, String)> = vec![
-        ("nav".into(), "nav".into(), "nav".into()),
-        ("footer".into(), "footer".into(), "footer".into()),
-        ("header".into(), "header".into(), "header".into()),
-        ("navbar".into(), ".navbar".into(), "div".into()),
-        ("site-header".into(), ".site-header".into(), "div".into()),
-        ("site-footer".into(), ".site-footer".into(), "div".into()),
+    // The `tag` field on user candidates is accepted for backward compat
+    // but no longer consumed: lol_html resolves the source span from the
+    // selector alone.
+    let mut candidates: Vec<(String, String)> = vec![
+        ("nav".into(), "nav".into()),
+        ("footer".into(), "footer".into()),
+        ("header".into(), "header".into()),
+        ("navbar".into(), ".navbar".into()),
+        ("site-header".into(), ".site-header".into()),
+        ("site-footer".into(), ".site-footer".into()),
     ];
     for c in &config.extract.candidates {
-        candidates.push((c.name.clone(), c.selector.clone(), c.tag.clone()));
+        candidates.push((c.name.clone(), c.selector.clone()));
     }
 
     let mut shared_blocks: Vec<SharedBlock> = Vec::new();
 
-    for (name, sel_str, tag_name) in &candidates {
-        let sel = match Selector::parse(sel_str) {
+    for (name, sel_str) in &candidates {
+        let sel = match ScraperSelector::parse(sel_str) {
             Ok(s) => s,
             Err(_) => continue,
         };
@@ -167,7 +206,6 @@ pub fn extract_fragments(root: &Path, config: &Config) -> Result<usize> {
                 shared_blocks.push(SharedBlock {
                     name: name.clone(),
                     selector: sel_str.clone(),
-                    tag: tag_name.clone(),
                     content,
                 });
             }
@@ -195,40 +233,9 @@ pub fn extract_fragments(root: &Path, config: &Config) -> Result<usize> {
     let mut modified_count = 0;
 
     for (path, content) in &pages {
-        let doc = Html::parse_document(content);
-        let mut modified = content.clone();
-        let mut changed = false;
-
-        for block in &shared_blocks {
-            let open_marker = format!("<!-- {}:{} -->", prefix, block.name);
-            let close_marker = format!("<!-- /{}:{} -->", prefix, block.name);
-
-            if modified.contains(&open_marker) {
-                continue;
-            }
-
-            let sel = match Selector::parse(&block.selector) {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
-
-            let has_block = doc.select(&sel).any(|el| el.html() == block.content);
-            if !has_block {
-                continue;
-            }
-
-            if let Some((start, end)) =
-                find_matching_tag_span(&modified, &block.tag, &block.content)
-            {
-                let raw_block = &modified[start..end];
-                let replacement = format!("{open_marker}\n{raw_block}\n{close_marker}");
-                modified = format!("{}{}{}", &modified[..start], replacement, &modified[end..]);
-                changed = true;
-            }
-        }
-
-        if changed {
-            fs::write(path, &modified).with_context(|| format!("writing {}", path.display()))?;
+        let new_content = rewrite_page(content, &shared_blocks, prefix)?;
+        if new_content != *content {
+            fs::write(path, &new_content).with_context(|| format!("writing {}", path.display()))?;
             modified_count += 1;
         }
     }
