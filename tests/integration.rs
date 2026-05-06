@@ -99,6 +99,14 @@ fn run_seo(dir: &Path) -> std::process::Output {
         .expect("failed to run pagekit")
 }
 
+fn run_a11y(dir: &Path) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
+        .arg(dir.to_str().unwrap())
+        .arg("a11y")
+        .output()
+        .expect("failed to run pagekit")
+}
+
 fn run_sync(dir: &Path) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
         .arg(dir.to_str().unwrap())
@@ -1471,5 +1479,187 @@ fn seo_warns_short_title_does_not_error() {
     assert!(
         stdout.contains("title is 2 chars"),
         "short-title warning must surface:\n{stdout}"
+    );
+}
+
+// --- a11y ---
+
+#[test]
+fn a11y_passes_clean_fixture() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html lang="en"><body>
+<img src="/x.png" alt="Logo">
+<form>
+  <label for="email">Email</label>
+  <input type="text" id="email" name="email">
+  <input type="submit" value="Send">
+</form>
+<a href="/about">Read about our service</a>
+</body></html>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("b.html"),
+        r#"<!DOCTYPE html><html lang="en"><body></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_a11y(root);
+    assert!(
+        output.status.success(),
+        "clean fixture should exit 0:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn a11y_flags_missing_alt() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html lang="en"><body>
+<img src="/no-alt.png">
+</body></html>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("b.html"),
+        r#"<!DOCTYPE html><html lang="en"><body></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_a11y(root);
+    assert_eq!(output.status.code(), Some(2));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("img-alt"),
+        "img-alt finding must surface:\n{stdout}"
+    );
+    assert!(stdout.contains("no-alt.png"));
+}
+
+#[test]
+fn a11y_flags_unlabeled_input() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html lang="en"><body>
+<form><input type="text" name="email"></form>
+</body></html>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("b.html"),
+        r#"<!DOCTYPE html><html lang="en"><body></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_a11y(root);
+    assert_eq!(output.status.code(), Some(2));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("form-label"),
+        "form-label finding must surface:\n{stdout}"
+    );
+}
+
+#[test]
+fn a11y_flags_missing_html_lang() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html><body></body></html>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("b.html"),
+        r#"<!DOCTYPE html><html lang="en"><body></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_a11y(root);
+    assert_eq!(output.status.code(), Some(2));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("html-lang"),
+        "html-lang finding must surface for the missing-lang page only:\n{stdout}"
+    );
+    // Page b.html has lang=en — must NOT appear.
+    assert!(
+        !stdout.contains("/b.html — missing lang"),
+        "page with lang attr must not be flagged:\n{stdout}"
+    );
+}
+
+#[test]
+fn a11y_flags_generic_link_text() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html lang="en"><body>
+<a href="/x">click here</a>
+<a href="/y">read more</a>
+<a href="/z">Read the full case study on hotel renovation</a>
+</body></html>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("b.html"),
+        r#"<!DOCTYPE html><html lang="en"><body></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_a11y(root);
+    assert_eq!(output.status.code(), Some(2));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("link-text"));
+    assert!(stdout.contains("\"click here\""));
+    assert!(stdout.contains("\"read more\""));
+    // The descriptive link must NOT be flagged.
+    assert!(
+        !stdout.contains("\"Read the full case study"),
+        "descriptive link text must not be flagged:\n{stdout}"
+    );
+}
+
+#[test]
+fn a11y_skips_svg_only_links() {
+    // Webflow/Bootstrap exports use SVG icons heavily inside links.
+    // Flagging every SVG-only link drowns real signal. Skip them and
+    // document the limitation.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html lang="en"><body>
+<a href="/home"><svg width="24" height="24"></svg></a>
+</body></html>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("b.html"),
+        r#"<!DOCTYPE html><html lang="en"><body></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_a11y(root);
+    assert!(
+        output.status.success(),
+        "SVG-only links must be tolerated by the grep-able subset:\nstdout: {}",
+        String::from_utf8_lossy(&output.stdout)
     );
 }

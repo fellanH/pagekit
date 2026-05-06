@@ -1,3 +1,4 @@
+mod a11y;
 mod check_strict;
 mod config;
 mod extract;
@@ -90,6 +91,11 @@ enum Cmd {
     /// hreflang, JSON-LD validity, heading hierarchy. Exit 0 = no
     /// errors (warns are OK), exit 2 = at least one error.
     Seo,
+    /// Accessibility check: grep-able WCAG subset (img alts, form
+    /// labels, html lang attr, empty/generic links). Color contrast,
+    /// focus styles, and dynamic ARIA need rendering and are NOT
+    /// covered. Pass means "cheap checks pass", not "WCAG compliant".
+    A11y,
 }
 
 fn main() -> Result<()> {
@@ -184,6 +190,12 @@ fn main() -> Result<()> {
         }
         Cmd::Seo => {
             let code = seo::run_seo(&root, &config)?;
+            if code != 0 {
+                std::process::exit(code);
+            }
+        }
+        Cmd::A11y => {
+            let code = a11y::run_a11y(&root, &config)?;
             if code != 0 {
                 std::process::exit(code);
             }
