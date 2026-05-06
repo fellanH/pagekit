@@ -86,7 +86,7 @@ fn main() -> Result<()> {
                 "pagekit: synced {n} file(s), watching {}/ …",
                 config.core.fragments_dir
             );
-            fragments::watch::run(&root, &config.core)?;
+            fragments::watch::run_with(&root, &config.core, &hooks)?;
         }
         Cmd::Check { strict, name } => {
             if strict {
