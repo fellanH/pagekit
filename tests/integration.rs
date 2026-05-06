@@ -67,6 +67,14 @@ fn run_extract_split(dir: &Path) -> std::process::Output {
         .expect("failed to run pagekit")
 }
 
+fn run_inventory(dir: &Path) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
+        .arg(dir.to_str().unwrap())
+        .arg("inventory")
+        .output()
+        .expect("failed to run pagekit")
+}
+
 fn run_sync(dir: &Path) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
         .arg(dir.to_str().unwrap())
@@ -908,5 +916,103 @@ fn extract_default_warns_on_variants() {
     assert!(
         !root.join("_fragments/nav-2.html").exists(),
         "default mode must NOT emit suffixed variants"
+    );
+}
+
+// --- inventory ---
+
+#[test]
+fn inventory_emits_class_lines() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html><body>
+<div class="foo bar"></div>
+<div class="foo baz"></div>
+</body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_inventory(root);
+    assert!(output.status.success(), "inventory failed: {:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+
+    assert!(
+        stdout.contains("/a.html\tclass\tfoo\n"),
+        "expected deduped foo line, got:\n{stdout}"
+    );
+    assert!(stdout.contains("/a.html\tclass\tbar\n"));
+    assert!(stdout.contains("/a.html\tclass\tbaz\n"));
+    // foo appears in two divs but should be deduped to one line per page.
+    let foo_lines = stdout.matches("/a.html\tclass\tfoo\n").count();
+    assert_eq!(foo_lines, 1, "class must be deduped per page");
+}
+
+#[test]
+fn inventory_emits_meta_and_canonical() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html><head>
+<title>Hello World</title>
+<meta name="description" content="Demo page">
+<meta property="og:title" content="HelloOG">
+<link rel="canonical" href="https://example.com/a">
+</head><body><h1>Hi</h1></body></html>"#,
+    )
+    .unwrap();
+    // Need ≥1 file; second file ensures inventory walks more than one path.
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_inventory(root);
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+
+    assert!(
+        stdout.contains("/a.html\ttitle\tHello World\n"),
+        "title line missing:\n{stdout}"
+    );
+    assert!(stdout.contains("/a.html\tmeta\tdescription=Demo page\n"));
+    assert!(stdout.contains("/a.html\tmeta\tog:title=HelloOG\n"));
+    assert!(stdout.contains("/a.html\tmeta\tcanonical=https://example.com/a\n"));
+    assert!(stdout.contains("/a.html\th1\tHi\n"));
+}
+
+#[test]
+fn inventory_grep_pipeline_returns_expected_pages() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    let with_navbar = "<html><body><nav class=\"navbar btn\"></nav></body></html>";
+    let without = "<html><body><div></div></body></html>";
+
+    fs::write(root.join("a.html"), with_navbar).unwrap();
+    fs::write(root.join("b.html"), without).unwrap();
+    fs::write(root.join("c.html"), with_navbar).unwrap();
+
+    let output = run_inventory(root);
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+
+    // Simulate `awk -F'\t' '$2=="class" && $3=="navbar"' | cut -f1 | sort -u`
+    let mut pages_with_navbar: Vec<&str> = stdout
+        .lines()
+        .filter(|line| {
+            let parts: Vec<&str> = line.split('\t').collect();
+            parts.len() == 3 && parts[1] == "class" && parts[2] == "navbar"
+        })
+        .map(|line| line.split('\t').next().unwrap())
+        .collect();
+    pages_with_navbar.sort();
+    pages_with_navbar.dedup();
+
+    assert_eq!(
+        pages_with_navbar,
+        vec!["/a.html", "/c.html"],
+        "grep-by-class should return exactly the pages declaring it"
     );
 }

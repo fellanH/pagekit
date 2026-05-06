@@ -2,6 +2,7 @@ mod check_strict;
 mod config;
 mod extract;
 mod init;
+mod inventory;
 mod transforms;
 
 use anyhow::{Context, Result};
@@ -64,6 +65,15 @@ enum Cmd {
     Config,
     /// Health check: report orphan fragments, orphan markers, malformed markers
     Doctor,
+    /// One-pass site inventory: tab-separated stream of every page's
+    /// classes, ids, hrefs, srcs, title, meta tags, headings, and
+    /// JSON-LD types. Grep-friendly; the foundation under all the
+    /// query-layer checks (links, seo, a11y) that build on top.
+    Inventory {
+        /// Save inventory to file instead of stdout. Prints a summary line.
+        #[arg(long, value_name = "PATH")]
+        save: Option<PathBuf>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -143,6 +153,9 @@ fn main() -> Result<()> {
             if issues > 0 {
                 std::process::exit(1);
             }
+        }
+        Cmd::Inventory { save } => {
+            inventory::run_inventory(&root, &config, save)?;
         }
     }
     Ok(())
