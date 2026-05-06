@@ -1663,3 +1663,75 @@ fn a11y_skips_svg_only_links() {
         String::from_utf8_lossy(&output.stdout)
     );
 }
+
+// --- check --strict --selector ---
+
+#[test]
+fn check_strict_selector_uniform_passes() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    let footer = "<footer><p>(c) SiteCo</p></footer>";
+    let page = |slug: &str| {
+        format!("<!DOCTYPE html><html><body><main>{slug}</main>{footer}</body></html>")
+    };
+
+    fs::write(root.join("a.html"), page("A")).unwrap();
+    fs::write(root.join("b.html"), page("B")).unwrap();
+    fs::write(root.join("c.html"), page("C")).unwrap();
+
+    let output = run_check_strict(root, &["--selector", "footer"]);
+    assert!(
+        output.status.success(),
+        "uniform footer must exit 0:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn check_strict_selector_detects_variance() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    let footer_a = "<footer><p>SiteCo Sweden</p></footer>";
+    let footer_b = "<footer><p>SiteCo International</p></footer>";
+
+    fs::write(
+        root.join("sv.html"),
+        format!("<!DOCTYPE html><html><body>{footer_a}</body></html>"),
+    )
+    .unwrap();
+    fs::write(
+        root.join("en.html"),
+        format!("<!DOCTYPE html><html><body>{footer_b}</body></html>"),
+    )
+    .unwrap();
+
+    let output = run_check_strict(root, &["--selector", "footer"]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "two variants must exit 2:\nstdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("2 variants"));
+}
+
+#[test]
+fn check_strict_selector_invalid_css_is_error() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(root.join("a.html"), "<html><body></body></html>").unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_check_strict(root, &["--selector", "this is not a selector >>"]);
+    assert!(!output.status.success(), "invalid selector must error");
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("invalid CSS selector"),
+        "should name the error class:\n{stderr}"
+    );
+}

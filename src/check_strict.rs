@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::extract::collect_html_files;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
+use scraper::{Html, Selector};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -90,9 +91,9 @@ fn capture_marker_hashes(html: &str, prefix: &str) -> Vec<(String, String)> {
     out
 }
 
-/// Run `pagekit check --strict`. Returns the process exit code:
-/// 0 = every fragment region uniform across pages, 2 = variance detected.
-/// IO/parse errors bubble via `Result` (caller surfaces exit 1).
+/// Run `pagekit check --strict`, marker-region mode (the default).
+/// Hashes content inside `<!-- prefix:NAME -->...<!-- /prefix:NAME -->`
+/// pairs and reports per-name variance across pages.
 pub fn run_check_strict(root: &Path, config: &Config, name_filter: Option<&str>) -> Result<i32> {
     let fragments_dir = root.join(&config.core.fragments_dir);
     let scan_root = root.join(&config.core.target_dir);
@@ -204,6 +205,115 @@ pub fn run_check_strict(root: &Path, config: &Config, name_filter: Option<&str>)
                 suffix
             );
         }
+    }
+
+    Ok(2)
+}
+
+/// Run `pagekit check --strict --selector "..."`. Generalizes the
+/// marker-region check to arbitrary CSS selectors: walk every page,
+/// hash the concatenated outer-HTML of all matching elements, group
+/// pages by hash. Different hashes ⇒ variance.
+///
+/// Multiple matches on a single page are concatenated in document
+/// order before hashing, so a page with 2 matching elements and a
+/// page with 1 produce different hashes (the count varies).
+pub fn run_check_strict_selector(root: &Path, config: &Config, selector_str: &str) -> Result<i32> {
+    let parsed = Selector::parse(selector_str)
+        .map_err(|e| anyhow!("invalid CSS selector '{selector_str}': {e:?}"))?;
+
+    let fragments_dir = root.join(&config.core.fragments_dir);
+    let scan_root = root.join(&config.core.target_dir);
+    let scan_root = if scan_root.is_dir() {
+        scan_root
+    } else {
+        root.to_path_buf()
+    };
+
+    let html_files = collect_html_files(
+        &scan_root,
+        &fragments_dir,
+        &config.core.exclude_dirs,
+        config.core.max_depth,
+    );
+
+    // hash → (match-count, pages with that hash)
+    let mut by_hash: BTreeMap<String, (usize, Vec<PathBuf>)> = BTreeMap::new();
+    let mut pages_with_no_match: Vec<PathBuf> = Vec::new();
+
+    for path in &html_files {
+        let content =
+            fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        let doc = Html::parse_document(&content);
+        let matches: Vec<String> = doc.select(&parsed).map(|el| el.html()).collect();
+        let rel = path.strip_prefix(&scan_root).unwrap_or(path).to_path_buf();
+        if matches.is_empty() {
+            pages_with_no_match.push(rel);
+            continue;
+        }
+        let concat = matches.join("\n");
+        let hash = hash8(concat.as_bytes());
+        let entry = by_hash.entry(hash).or_insert((matches.len(), Vec::new()));
+        entry.1.push(rel);
+    }
+
+    if by_hash.is_empty() && pages_with_no_match.is_empty() {
+        println!("pagekit: no pages scanned");
+        return Ok(0);
+    }
+
+    println!(
+        "selector \"{}\" — {} variant{} across {} matching page{}:",
+        selector_str,
+        by_hash.len(),
+        if by_hash.len() == 1 { "" } else { "s" },
+        by_hash.values().map(|(_, p)| p.len()).sum::<usize>(),
+        if by_hash.values().map(|(_, p)| p.len()).sum::<usize>() == 1 {
+            ""
+        } else {
+            "s"
+        },
+    );
+
+    if !pages_with_no_match.is_empty() {
+        println!(
+            "  ({} page{} did not match the selector and were skipped)",
+            pages_with_no_match.len(),
+            if pages_with_no_match.len() == 1 {
+                ""
+            } else {
+                "s"
+            }
+        );
+    }
+
+    if by_hash.len() <= 1 {
+        return Ok(0);
+    }
+
+    // Sort variants: most pages first, then hash for stability.
+    let mut groups: Vec<(&String, &(usize, Vec<PathBuf>))> = by_hash.iter().collect();
+    groups.sort_by(|a, b| b.1 .1.len().cmp(&a.1 .1.len()).then_with(|| a.0.cmp(b.0)));
+
+    println!();
+    for (hash, (count, pages)) in &groups {
+        let sample: Vec<String> = pages
+            .iter()
+            .take(5)
+            .map(|p| format!("/{}", p.display()))
+            .collect();
+        let suffix = if pages.len() > 5 {
+            format!(", … (+{} more)", pages.len() - 5)
+        } else {
+            String::new()
+        };
+        println!(
+            "  hash {hash} ({} pages, {count} match{} each): {}{}",
+            pages.len(),
+            if *count == 1 { "" } else { "es" },
+            sample.join(", "),
+            suffix
+        );
     }
 
     Ok(2)

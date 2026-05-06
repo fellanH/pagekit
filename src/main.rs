@@ -48,8 +48,15 @@ enum Cmd {
         #[arg(long)]
         strict: bool,
         /// Limit the strict check to a single fragment name.
-        #[arg(long, value_name = "NAME")]
+        /// Mutually exclusive with --selector.
+        #[arg(long, value_name = "NAME", conflicts_with = "selector")]
         name: Option<String>,
+        /// Generalized strict check: hash all elements matching the
+        /// given CSS selector per page (concatenated in document order),
+        /// report variance. Implies --strict. Mutually exclusive with
+        /// --name.
+        #[arg(long, value_name = "CSS")]
+        selector: Option<String>,
     },
     /// Create a new HTML page with marker pairs for all fragments
     Init {
@@ -120,7 +127,18 @@ fn main() -> Result<()> {
             );
             fragments::watch::run_with(&root, &config.core, &hooks)?;
         }
-        Cmd::Check { strict, name } => {
+        Cmd::Check {
+            strict,
+            name,
+            selector,
+        } => {
+            if let Some(sel) = selector.as_deref() {
+                let code = check_strict::run_check_strict_selector(&root, &config, sel)?;
+                if code != 0 {
+                    std::process::exit(code);
+                }
+                return Ok(());
+            }
             if strict {
                 let code = check_strict::run_check_strict(&root, &config, name.as_deref())?;
                 if code != 0 {
