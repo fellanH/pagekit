@@ -65,28 +65,31 @@ sub-nav-kista  3      1         ✓ uniform
   path_root = "/"          # absolute prefix that fragments use; default unset (no rewriting)
   attrs = ["href", "src"]  # attributes to rewrite; default if path_root is set
   ```
-- `transforms.path_root` is `Option<String>`; absent = today's behavior (fragments core sync, no rewriting)
-- When set, pagekit's sync path takes ownership of the marker-region replacement instead of delegating to `fragments::sync_all`. Implementation cut to evaluate during scoping:
-  - **A:** pagekit reimplements sync (single pass with lol_html: locate marker pairs, load matching fragment, transform paths, splice in)
-  - **B:** delegate to `fragments::sync_all` then post-process each modified page in a second lol_html pass
-  - Worker decides; A is cleaner if fragments core's marker-walking is easy to mirror, B is simpler at the cost of a second pass per page
-- Path rewrite logic:
-  - For each attr listed (default `href`, `src`), if value starts with `path_root` — rewrite to relative-to-destination-page-depth
-  - Skip values matching `^(https?:|mailto:|tel:|data:|#)` or already-relative (`./` or `../` prefix or no leading `/`)
-  - Fragment-internal anchors (`#section-id`) preserved
-- Sync stays idempotent: re-syncing a page produces no diff
+- `transforms.path_root` is `Option<String>`; absent = today's behavior (no hooks installed; falls through to plain `fragments::sync_all`).
+- **Upstream primitive (shipped 2026-05-06 in fragments v0.6.0, commit 7783628):** `fragments::SyncHook` trait + `fragments::sync_all_with(root, config, hooks)` and `fragments::check_all_with(root, config, hooks)`. Hooks chain sequentially; each receives `(name, content, target, root) -> Result<String>`. Fragment files on disk untouched; transforms only modify the copy that lands in the target's marker region.
+- Implementation:
+  - New `src/transforms/depth_relativizer.rs` (or similar) defines a `DepthRelativizer` struct that implements `fragments::SyncHook`. The hook computes target depth from `target` relative to `root`, walks the fragment content with lol_html, rewrites attrs (default `href`, `src`) whose value starts with `transforms.path_root` to the correct `../`-stack for that depth.
+  - `src/main.rs` `Cmd::Sync` and `Cmd::Check` handlers build a `Vec<Box<dyn SyncHook>>` from config and call `fragments::sync_all_with` / `check_all_with`. Empty `[transforms]` section ⇒ empty hook stack ⇒ unchanged behavior.
+  - **Consistency contract (fragments v0.6.0 doc):** any consumer that calls `sync_all_with(hooks)` MUST also call `check_all_with(hooks)`. Both `Cmd::Sync` and `Cmd::Check` MUST take the same hook stack — otherwise check reports staleness against unhooked content while sync writes hooked content. Wire both at the same time.
+- Path rewrite logic (inside the hook):
+  - For each attr listed (default `href`, `src`), if value starts with `path_root` — rewrite to relative-to-target-page depth.
+  - Skip values matching `^(https?:|mailto:|tel:|data:|#)` or already-relative (`./` or `../` prefix or no leading `/`).
+  - Fragment-internal anchors (`#section-id`) preserved.
+- Sync stays idempotent: re-syncing a page produces no diff.
 
 **Done-when:**
-- `[transforms]` schema parses; existing tests stay green (no path_root in their configs)
-- `src/transforms.rs` (new) implements path rewriting against an HTML byte slice via lol_html
+- `[transforms]` schema parses; existing tests stay green (no `path_root` in their configs ⇒ empty hook stack ⇒ identical behavior).
+- `DepthRelativizer` implements `fragments::SyncHook` and lives in `src/transforms/`.
+- `Cmd::Sync` and `Cmd::Check` both call `_with` variants and pass the same hook stack.
 - Tests in `tests/integration.rs`:
-  - `sync_rewrites_paths_per_depth` — 3-page site at depths 0/1/2 with footer fragment containing absolute paths; assert correct relative paths per page after sync
-  - `sync_preserves_external_urls` — http://, mailto:, tel:, # left alone
-  - `sync_idempotent_with_transforms` — second sync produces identical bytes
+  - `sync_rewrites_paths_per_depth` — 3-page site at depths 0/1/2 with footer fragment containing absolute paths; assert correct relative paths per page after sync.
+  - `sync_preserves_external_urls` — `http://`, `mailto:`, `tel:`, `#` left alone.
+  - `sync_idempotent_with_transforms` — second sync produces identical bytes.
+  - `check_uses_same_hooks_as_sync` — `pagekit check` against a freshly-synced site reports zero staleness (consistency-contract gate).
 
-**Verification:** ettsmart.se footer absolutized to use `/sollentuna` etc., synced into pages at depths 0/1/2; manual diff confirms `../sollentuna` and `../../sollentuna` land where expected; CF Pages preview deploys without 404s.
+**Verification:** ettsmart.se footer absolutized to use `/sollentuna` etc., synced into pages at depths 0/1/2; manual diff confirms `../sollentuna` and `../../sollentuna` land where expected; `pagekit check` clean on the same tree; CF Pages preview deploys without 404s.
 
-**Worker authority:** decide-and-document on impl cut (A vs B), the exact attr set in the default, and whether to introduce a `pagekit::sync` function in the binary or keep the change CLI-internal. Halt only if fragments core's API forces a cross-crate change to support B; in that case write a proposal in `harness/rules/proposals/` and dispatch via chad-omni.
+**Worker authority:** decide-and-document on the exact attr set in the default, the hook's struct name, and whether to introduce a small `pagekit::sync_with_transforms` helper in the binary or inline the hook-stack assembly in `main.rs`. The fragments-core impl cut (A vs B) is closed — `SyncHook` is the primitive; use it. Halt only if the hook signature can't express what `DepthRelativizer` needs (then surface to chad-pagekit with the specific gap). Reference fragments v0.6.0 `tests/hooks.rs` for hook-shape examples.
 
 ---
 
