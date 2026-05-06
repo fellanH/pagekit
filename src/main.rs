@@ -5,6 +5,7 @@ mod init;
 mod inventory;
 mod links;
 mod normalize;
+mod seo;
 mod transforms;
 
 use anyhow::{Context, Result};
@@ -85,6 +86,10 @@ enum Cmd {
     /// External URLs (http://, mailto:, tel:) are NOT fetched. Exit 0
     /// = clean, exit 2 = issues found.
     Links,
+    /// SEO health check: titles, descriptions, canonicals, OG/Twitter,
+    /// hreflang, JSON-LD validity, heading hierarchy. Exit 0 = no
+    /// errors (warns are OK), exit 2 = at least one error.
+    Seo,
 }
 
 fn main() -> Result<()> {
@@ -173,6 +178,12 @@ fn main() -> Result<()> {
         }
         Cmd::Links => {
             let code = links::run_links(&root, &config)?;
+            if code != 0 {
+                std::process::exit(code);
+            }
+        }
+        Cmd::Seo => {
+            let code = seo::run_seo(&root, &config)?;
             if code != 0 {
                 std::process::exit(code);
             }

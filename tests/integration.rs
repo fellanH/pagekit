@@ -91,6 +91,14 @@ fn run_links(dir: &Path) -> std::process::Output {
         .expect("failed to run pagekit")
 }
 
+fn run_seo(dir: &Path) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
+        .arg(dir.to_str().unwrap())
+        .arg("seo")
+        .output()
+        .expect("failed to run pagekit")
+}
+
 fn run_sync(dir: &Path) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
         .arg(dir.to_str().unwrap())
@@ -1278,5 +1286,190 @@ fn links_skips_platform_files_in_orphan_check() {
         output.status.success(),
         "platform files must NOT be flagged as orphans:\nstdout: {}",
         String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+// --- seo ---
+
+fn clean_seo_page(title: &str, description: &str, canonical: &str) -> String {
+    format!(
+        r#"<!DOCTYPE html><html lang="en"><head>
+<title>{title}</title>
+<meta name="description" content="{description}">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="{description}">
+<meta property="og:type" content="website">
+<link rel="canonical" href="{canonical}">
+</head><body><h1>Hello</h1></body></html>"#
+    )
+}
+
+#[test]
+fn seo_passes_clean_fixture() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        clean_seo_page(
+            "Page A — Demo",
+            "A clean demo page with all the SEO essentials in place for the test suite.",
+            "https://example.com/a",
+        ),
+    )
+    .unwrap();
+    fs::write(
+        root.join("b.html"),
+        clean_seo_page(
+            "Page B — Demo",
+            "A different clean demo page with description that meets the recommended length.",
+            "https://example.com/b",
+        ),
+    )
+    .unwrap();
+
+    let output = run_seo(root);
+    assert!(
+        output.status.success(),
+        "clean fixture should exit 0:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn seo_flags_missing_title() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html lang="en"><head>
+<meta name="description" content="Demo without title for the test suite test fixture data.">
+<link rel="canonical" href="https://example.com/a">
+</head><body></body></html>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("b.html"),
+        clean_seo_page(
+            "Page B Title",
+            "A second clean demo page with description that meets the recommended length range.",
+            "https://example.com/b",
+        ),
+    )
+    .unwrap();
+
+    let output = run_seo(root);
+    assert_eq!(output.status.code(), Some(2));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("missing <title>"),
+        "missing-title finding must surface:\n{stdout}"
+    );
+}
+
+#[test]
+fn seo_flags_canonical_origin_mismatch() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        clean_seo_page(
+            "Page A",
+            "A demo page with canonical pointing at the www subdomain version of the site.",
+            "https://www.example.com/a",
+        ),
+    )
+    .unwrap();
+    fs::write(
+        root.join("b.html"),
+        clean_seo_page(
+            "Page B",
+            "A demo page with canonical pointing at the apex domain version of the site.",
+            "https://example.com/b",
+        ),
+    )
+    .unwrap();
+
+    let output = run_seo(root);
+    assert_eq!(output.status.code(), Some(2));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("scheme/host mismatch"),
+        "canonical-origin-mismatch finding must surface:\n{stdout}"
+    );
+}
+
+#[test]
+fn seo_flags_invalid_json_ld() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    let bad_json_page = r#"<!DOCTYPE html><html lang="en"><head>
+<title>JSON-LD Test Page</title>
+<meta name="description" content="Demo page with intentionally invalid JSON-LD for the parse-error test.">
+<meta property="og:title" content="JSON-LD Test Page">
+<meta property="og:description" content="Demo">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://example.com/a">
+<script type="application/ld+json">{"@type": Hotel, "name":"Bad"}</script>
+</head><body><h1>Test</h1></body></html>"#;
+    fs::write(root.join("a.html"), bad_json_page).unwrap();
+    fs::write(
+        root.join("b.html"),
+        clean_seo_page(
+            "Page B Title",
+            "A second clean demo page with description that meets the recommended length range.",
+            "https://example.com/b",
+        ),
+    )
+    .unwrap();
+
+    let output = run_seo(root);
+    assert_eq!(output.status.code(), Some(2));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("invalid JSON"),
+        "json-ld parse error must surface:\n{stdout}"
+    );
+}
+
+#[test]
+fn seo_warns_short_title_does_not_error() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        clean_seo_page(
+            "Hi", // 2 chars — under threshold
+            "A demo page with all the other SEO essentials so only the short title triggers.",
+            "https://example.com/a",
+        ),
+    )
+    .unwrap();
+    fs::write(
+        root.join("b.html"),
+        clean_seo_page(
+            "Page B Title — Demo",
+            "A second clean demo page with description that meets the recommended length range.",
+            "https://example.com/b",
+        ),
+    )
+    .unwrap();
+
+    let output = run_seo(root);
+    // Warns alone should NOT exit 2.
+    assert!(
+        output.status.success(),
+        "warn-only output must exit 0:\nstdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("title is 2 chars"),
+        "short-title warning must surface:\n{stdout}"
     );
 }
