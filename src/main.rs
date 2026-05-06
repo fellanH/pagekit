@@ -1,0 +1,121 @@
+mod config;
+mod extract;
+mod init;
+
+use anyhow::{Context, Result};
+use clap::{Parser, Subcommand};
+use config::Config;
+use std::path::PathBuf;
+
+#[derive(Parser)]
+#[command(
+    name = "pagekit",
+    version,
+    about = "Vanilla HTML + CSS site management for agents",
+    long_about = "pagekit composes the `fragments` text-sync primitive with HTML-specific \
+helpers: page scaffolding, DOM-aware shared-block extraction, health checks. \
+\n\nMarkers are HTML comments: `<!-- fragment:NAME -->...<!-- /fragment:NAME -->`. \
+Edit `fragments/NAME.html`, run `pagekit sync`, every page with the marker pair updates. \
+\n\nConfig lives in `fragments.toml` (optional). See specs/pagekit.md for the schema."
+)]
+struct Cli {
+    /// Project root (contains fragments/ and target files)
+    #[arg(default_value = ".")]
+    root: PathBuf,
+
+    #[command(subcommand)]
+    cmd: Option<Cmd>,
+}
+
+#[derive(Subcommand)]
+enum Cmd {
+    /// Sync all files with current fragment content (default)
+    Sync,
+    /// Watch fragments/ for changes, sync on save
+    Watch,
+    /// Dry-run: exit 1 if any file is stale or has malformed markers
+    Check,
+    /// Create a new HTML page with marker pairs for all fragments
+    Init {
+        /// Filename to create (e.g. about.html)
+        file: String,
+    },
+    /// Scan pages, detect shared blocks, extract to fragments/ and insert markers
+    Extract,
+    /// List every fragment and how many pages reference it
+    List,
+    /// Print the effective config (defaults merged with fragments.toml)
+    Config,
+    /// Health check: report orphan fragments, orphan markers, malformed markers
+    Doctor,
+}
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+    let root = std::fs::canonicalize(&cli.root)
+        .with_context(|| format!("cannot resolve root: {}", cli.root.display()))?;
+
+    let config = Config::load(&root)?;
+
+    match cli.cmd.unwrap_or(Cmd::Sync) {
+        Cmd::Sync => {
+            let n = fragments::sync_all(&root, &config.core)?;
+            println!("pagekit: updated {n} file(s)");
+        }
+        Cmd::Watch => {
+            let n = fragments::sync_all(&root, &config.core)?;
+            println!(
+                "pagekit: synced {n} file(s), watching {}/ …",
+                config.core.fragments_dir
+            );
+            fragments::watch::run(&root, &config.core)?;
+        }
+        Cmd::Check => {
+            let issues = fragments::check_all(&root, &config.core)?;
+            if issues.is_empty() {
+                println!("pagekit: all files up to date");
+            } else {
+                for issue in &issues {
+                    match issue {
+                        fragments::CheckIssue::Stale(p) => eprintln!("stale: {}", p.display()),
+                        fragments::CheckIssue::UnpairedOpen { path, name } => {
+                            eprintln!("unpaired open marker '{}' in {}", name, path.display())
+                        }
+                        fragments::CheckIssue::UnpairedClose { path, name } => {
+                            eprintln!("unpaired close marker '{}' in {}", name, path.display())
+                        }
+                        fragments::CheckIssue::DuplicatePair { path, name } => eprintln!(
+                            "duplicate marker pair '{}' in {} (only first pair gets synced)",
+                            name,
+                            path.display()
+                        ),
+                    }
+                }
+                std::process::exit(1);
+            }
+        }
+        Cmd::Init { file } => {
+            init::init_page(&root, &file, &config)?;
+        }
+        Cmd::Extract => {
+            let n = extract::extract_fragments(&root, &config)?;
+            if n > 0 {
+                println!("pagekit: extraction complete, {n} page(s) updated");
+            }
+        }
+        Cmd::List => {
+            fragments::list::list_fragments(&root, &config.core)?;
+        }
+        Cmd::Config => {
+            let toml = toml::to_string_pretty(&config).context("serializing config")?;
+            print!("{toml}");
+        }
+        Cmd::Doctor => {
+            let issues = fragments::doctor::run_doctor(&root, &config.core)?;
+            if issues > 0 {
+                std::process::exit(1);
+            }
+        }
+    }
+    Ok(())
+}
