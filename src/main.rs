@@ -3,6 +3,7 @@ mod config;
 mod extract;
 mod init;
 mod inventory;
+mod links;
 mod normalize;
 mod transforms;
 
@@ -80,6 +81,10 @@ enum Cmd {
     /// `path_root="/"` when no `[transforms]` config is present —
     /// running the command is the opt-in.
     NormalizePaths,
+    /// Find broken internal links, broken anchors, and orphan assets.
+    /// External URLs (http://, mailto:, tel:) are NOT fetched. Exit 0
+    /// = clean, exit 2 = issues found.
+    Links,
 }
 
 fn main() -> Result<()> {
@@ -165,6 +170,12 @@ fn main() -> Result<()> {
         }
         Cmd::NormalizePaths => {
             normalize::normalize_paths(&root, &config)?;
+        }
+        Cmd::Links => {
+            let code = links::run_links(&root, &config)?;
+            if code != 0 {
+                std::process::exit(code);
+            }
         }
     }
     Ok(())

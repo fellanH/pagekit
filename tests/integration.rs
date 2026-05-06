@@ -83,6 +83,14 @@ fn run_normalize_paths(dir: &Path) -> std::process::Output {
         .expect("failed to run pagekit")
 }
 
+fn run_links(dir: &Path) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
+        .arg(dir.to_str().unwrap())
+        .arg("links")
+        .output()
+        .expect("failed to run pagekit")
+}
+
 fn run_sync(dir: &Path) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
         .arg(dir.to_str().unwrap())
@@ -1118,4 +1126,157 @@ fn normalize_paths_skips_externals() {
     assert!(after.contains(r##"href="#anchor""##));
     assert!(after.contains(r#"src="data:image/png;base64,xx""#));
     assert!(after.contains(r#"href="../sibling.html""#));
+}
+
+// --- links ---
+
+#[test]
+fn links_passes_clean_site() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(root.join("a.html"), "<html><body></body></html>").unwrap();
+    fs::write(
+        root.join("b.html"),
+        r#"<html><body><a href="a.html">A</a></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_links(root);
+    assert!(
+        output.status.success(),
+        "clean site should exit 0:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn links_detects_broken_internal() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<html><body><a href="/missing-page">x</a></body></html>"#,
+    )
+    .unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_links(root);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "broken internal link should exit 2"
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("/missing-page"),
+        "output should name the broken target:\n{stdout}"
+    );
+    assert!(stdout.contains("broken internal links"));
+}
+
+#[test]
+fn links_skips_external_urls() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r##"<html><body>
+<a href="https://example.com/anything">ext</a>
+<a href="mailto:x@example.com">mail</a>
+<a href="tel:+12345">tel</a>
+<a href="//cdn.example.com/x">proto-rel</a>
+<img src="data:image/png;base64,xx">
+<a href="#">webflow-placeholder</a>
+</body></html>"##,
+    )
+    .unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_links(root);
+    assert!(
+        output.status.success(),
+        "externals + bare # must NOT be flagged:\nstdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn links_detects_orphan_asset() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::create_dir_all(root.join("_assets")).unwrap();
+    fs::write(root.join("_assets/used.svg"), "<svg></svg>").unwrap();
+    fs::write(root.join("_assets/unused.svg"), "<svg></svg>").unwrap();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<html><body><img src="/_assets/used.svg"></body></html>"#,
+    )
+    .unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_links(root);
+    assert_eq!(output.status.code(), Some(2));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("_assets/unused.svg"),
+        "output should flag the orphan:\n{stdout}"
+    );
+    // "_assets/used.svg" alone (without "unused" prefix) must not appear
+    // — it IS referenced via the img tag, so should not be flagged.
+    assert!(
+        !stdout.contains("_assets/used.svg (no references)"),
+        "referenced asset must NOT be flagged:\n{stdout}"
+    );
+}
+
+#[test]
+fn links_resolves_url_encoded_paths() {
+    // URL-encoded spaces in href/src should resolve to the actual file
+    // on disk after percent-decoding. Without decoding, this regresses
+    // every Webflow export with spaces in image filenames.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::create_dir_all(root.join("_assets")).unwrap();
+    fs::write(root.join("_assets/Gallery 1.avif"), b"x").unwrap();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<html><body><img src="/_assets/Gallery%201.avif"></body></html>"#,
+    )
+    .unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_links(root);
+    assert!(
+        output.status.success(),
+        "URL-encoded path must resolve:\nstdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn links_skips_platform_files_in_orphan_check() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(root.join("_headers"), "/* X-Frame-Options DENY").unwrap();
+    fs::write(root.join("_redirects"), "/old /new 301").unwrap();
+    fs::write(root.join("robots.txt"), "User-agent: *").unwrap();
+    fs::write(root.join("manifest.json"), "{}").unwrap();
+    fs::write(root.join("a.html"), "<html><body></body></html>").unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_links(root);
+    assert!(
+        output.status.success(),
+        "platform files must NOT be flagged as orphans:\nstdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
 }
