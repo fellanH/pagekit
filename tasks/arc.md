@@ -4,9 +4,9 @@ Binary ships. Sprints 4-6 closed. Test suite green: 50 integration + 35 unit, cl
 
 ## Active arc
 
-**Sprint 6 closed (Phase 2 of agent-tooling trajectory).** All four deliverables shipped: `pagekit links` (commit `df60f99`), `pagekit seo` (commit `ddb0e72`), `pagekit a11y` (commit `ce20033`), generalized `check --strict --selector` (commit `53c46e5`). Each calibrated against ettsmart.se as the reference consumer, surfacing real findings without false-positive noise. Sprint folder: [`sprints/2026-05-correctness-checks/`](../sprints/2026-05-correctness-checks/README.md).
+**Sprint 7 — retrieval + composition (Phase 3, closes agent-tooling trajectory).** Folder: [`sprints/2026-05-retrieval-composition/`](../sprints/2026-05-retrieval-composition/README.md). Three deliverables: `pagekit assets` (HTML+CSS reference graph, hash/byte/type manifest, closes the CSS-loaded-orphan gap from Sprint 6 D1), `pagekit show <name>` (fragment + classes + asset bundle in one report), `pagekit preflight` (composes check + doctor + links + seo + a11y into a single go-live gate). After this lands, pagekit is feature-complete for the strategic exchange's Phase 1-3 plan.
 
-**Phase 3 candidate (Sprint 7):** retrieval + composition — `pagekit show <component>` (bundle: fragment + CSS + assets), `pagekit assets` (manifest with hashes/dims/orphan-detection/semantic-aliases — naturally closes the CSS-loaded-orphan gap surfaced by `pagekit links`), `pagekit preflight` (composes all checks into single go-live gate). Trigger-gated on consumer demand or Felix prioritization.
+**Sprint 6 closed (Phase 2).** All four deliverables shipped: `pagekit links`, `pagekit seo`, `pagekit a11y`, generalized `check --strict --selector`. Sprint folder: [`sprints/2026-05-correctness-checks/`](../sprints/2026-05-correctness-checks/README.md).
 
 **Sprint 5 closed (Phase 1).** Both deliverables shipped: `pagekit inventory` (commit `cdfd2e7`) and `pagekit normalize-paths` (commit `efc39a7`). Sprint folder: [`sprints/2026-05-query-layer/`](../sprints/2026-05-query-layer/README.md).
 
