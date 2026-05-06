@@ -10,19 +10,17 @@ Worker-tier per `harness/rules/omni/tier-architecture.md`.
 
 ```bash
 cd ~/omni/workspaces/pagekit
-# Stage 1: scaffolding only — no code yet
-# Stage 2 (next): split init.rs/extract.rs from fragments and build here
-# cargo build --release
-# cp target/release/pagekit ~/.local/bin/pagekit
+cargo build --release
+cp target/release/pagekit ~/.local/bin/pagekit
 ```
 
-Stage 1 is documentation + workspace scaffolding only. The binary materializes in Stage 2 when code is split from fragments.
+Binary ships. Composes the `fragments` crate (path = `../fragments`) for sync/watch/check/list/doctor/config; adds `init` and `extract` directly.
 
 ## When in doubt, prompt with
 
-- "What's the next step in the pagekit ↔ fragments split?"
-- "Wire pagekit into <site>" (post Stage 2)
+- "Wire pagekit into <site>"
 - "Audit the pagekit surface; what's still leaking from fragments core?"
+- "What's the next consumer-driven feature worth building?"
 
 ## When to use
 
@@ -54,9 +52,10 @@ This workspace does NOT:
 
 ## Skills in scope
 
-- `init`, `extract`, HTML-aware `doctor` extensions (Stage 2)
-- Framework-export profiles for common Webflow/Bootstrap-class layouts (Stage 3+)
-- `lol_html`-based extract rewrite (Stage 3) — replaces `scraper`, eliminates source-vs-DOM reconciliation hacks
+- `init` and `extract` (shipped). `extract` source-rewrite runs on `lol_html` for byte-preserving wrap; cross-page detection still uses `scraper`.
+- HTML-aware `doctor` extensions (next consumer-driven feature).
+- Framework-export profiles for common Webflow/Bootstrap-class layouts (Stage 3+).
+- `pagekit check --strict` — pre-flight diff of marker regions across pages by name; warns when content under the same marker name varies. Safety gate for sync. See `tasks/arc.md` backlog.
 
 ## Tools in scope
 

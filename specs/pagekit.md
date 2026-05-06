@@ -46,22 +46,22 @@ Empirically: n=2 fragments consumers (felixhellstrom.com integrated, ettsmart.se
 fragments = { path = "../fragments" }
 ```
 
-Stage 2 will:
+The composition (shipped):
 
-1. Add `lib.rs` to fragments exposing public API: `Config`, `sync_all`, `check_all`, `Fragments::load`, `referenced_fragment_names`, `watch::run`, etc.
-2. Move `init.rs` and `extract.rs` from fragments into pagekit
-3. Move HTML-specific config (`[[extract.candidates]]`) from fragments::Config to pagekit's Config
-4. pagekit wraps fragments' Config in its own TOML schema (or composes via separate sections)
-5. pagekit binary's CLI re-exposes the fragments commands (`sync`, `watch`, `check`, `list`, `doctor`) plus its own (`init`, `extract`) — agent-facing UX is one binary, one CLI
+1. `fragments` exposes a `lib.rs` with public API: `Config`, `sync_all`, `check_all`, `Fragments::load`, `referenced_fragment_names`, `watch::run`, etc.
+2. `init.rs` and `extract.rs` live inside pagekit.
+3. HTML-specific config (`[[extract.candidates]]`) lives in pagekit's `Config`; fragments core is format-agnostic.
+4. pagekit's `Config` flattens `fragments::Config` so a single `fragments.toml` configures both layers.
+5. pagekit's CLI re-exposes the fragments commands (`sync`, `watch`, `check`, `list`, `doctor`, `config`) and adds its own (`init`, `extract`). Agent-facing UX: one binary, one CLI.
 
 ## Status
 
 | Stage | What | Status |
 |---|---|---|
-| 1 | Scaffold workspace, update framing | **In progress** (this commit) |
-| 2 | Code split: lib.rs in fragments, move init.rs + extract.rs into pagekit | Pending |
-| 3 | Rewrite `extract` on `lol_html` (eliminates source-vs-DOM reconciliation) | Pending |
-| 3+ | Framework-export profiles, HTML-validity in doctor, link integrity | Future |
+| 1 | Scaffold workspace, update framing | Done |
+| 2 | Code split: lib.rs in fragments, move init.rs + extract.rs into pagekit | Done |
+| 3 | Rewrite `extract` on `lol_html` (eliminates source-vs-DOM reconciliation) | Done |
+| 3+ | Framework-export profiles, HTML-validity in doctor, link integrity, `pagekit check --strict` | Backlog |
 
 ## Origin
 
