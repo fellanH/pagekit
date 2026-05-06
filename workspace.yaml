@@ -1,0 +1,14 @@
+name: pagekit
+layout: single
+type: product
+status: active
+owner: felix
+
+stack:
+  - rust
+
+git:
+  identity: personal
+  push_allowed: true
+
+vault_bucket: pagekit
