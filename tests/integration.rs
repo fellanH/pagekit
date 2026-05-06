@@ -124,6 +124,14 @@ fn run_show(dir: &Path, name: &str) -> std::process::Output {
         .expect("failed to run pagekit")
 }
 
+fn run_preflight(dir: &Path) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
+        .arg(dir.to_str().unwrap())
+        .arg("preflight")
+        .output()
+        .expect("failed to run pagekit")
+}
+
 fn run_sync(dir: &Path) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
         .arg(dir.to_str().unwrap())
@@ -1945,4 +1953,82 @@ fn show_dedupes_classes_alphabetical() {
     // Drop the count line if present.
     lines.retain(|l| !l.contains("("));
     assert_eq!(lines, vec!["a", "x", "y", "z"]);
+}
+
+// --- preflight ---
+
+#[test]
+fn preflight_passes_clean_site() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    // check + doctor require the fragments dir to exist; a real
+    // pagekit-managed site always has it after `pagekit init`.
+    fs::create_dir_all(root.join("_fragments")).unwrap();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html lang="en"><head>
+<title>Page A — Demo</title>
+<meta name="description" content="A clean demo page that meets all the SEO essentials baseline rules.">
+<meta property="og:title" content="Page A">
+<meta property="og:description" content="OG demo">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://example.com/a">
+</head><body><h1>Hello</h1><a href="b.html">Link to B page</a></body></html>"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("b.html"),
+        r#"<!DOCTYPE html><html lang="en"><head>
+<title>Page B — Demo</title>
+<meta name="description" content="A second clean demo page that meets all the SEO essentials baseline rules.">
+<meta property="og:title" content="Page B">
+<meta property="og:description" content="OG demo">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://example.com/b">
+</head><body><h1>Hello</h1><a href="a.html">Link to A page</a></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_preflight(root);
+    assert!(
+        output.status.success(),
+        "clean site should exit 0:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("preflight: 5 of 5 checks passing"));
+    assert!(stdout.contains("go-live clear"));
+}
+
+#[test]
+fn preflight_aggregates_failures() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    fs::create_dir_all(root.join("_fragments")).unwrap();
+
+    // Page with a broken internal link and missing seo essentials.
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html lang="en"><body>
+<a href="/missing-page">broken</a>
+</body></html>"#,
+    )
+    .unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_preflight(root);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "site with failing checks must exit 2"
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("pagekit preflight:"));
+    assert!(
+        stdout.contains("links") && stdout.contains("FAIL"),
+        "links should appear as FAIL in summary:\n{stdout}"
+    );
+    assert!(stdout.contains("check(s) failing"));
 }

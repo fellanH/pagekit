@@ -8,6 +8,7 @@ mod init;
 mod inventory;
 mod links;
 mod normalize;
+mod preflight;
 mod seo;
 mod show;
 mod transforms;
@@ -124,6 +125,11 @@ enum Cmd {
         /// Fragment name (no extension; resolves to <name>.html in fragments_dir).
         name: String,
     },
+    /// Composes check + doctor + links + seo + a11y into a single
+    /// go-live gate. Each check's findings are forwarded inline; the
+    /// final summary table reports per-check pass/fail. Exit 0 if all
+    /// pass, exit 2 if any fail.
+    Preflight,
 }
 
 fn main() -> Result<()> {
@@ -244,6 +250,12 @@ fn main() -> Result<()> {
         }
         Cmd::Show { name } => {
             let code = show::run_show(&root, &config, &name)?;
+            if code != 0 {
+                std::process::exit(code);
+            }
+        }
+        Cmd::Preflight => {
+            let code = preflight::run_preflight(&root, &config)?;
             if code != 0 {
                 std::process::exit(code);
             }
