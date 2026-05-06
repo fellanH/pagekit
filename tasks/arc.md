@@ -1,10 +1,10 @@
 # pagekit
 
-Binary ships. Sprint 4 closed: D1+D2+D3 landed (commits `597478e`, `a75a4bb`, `634dc36`); watch hookable via fragments v0.6.1 (`6b524a2`). Test suite green: 23 integration + 11 unit, clippy + fmt clean.
+Binary ships. Sprint 4 closed; cleanup commit (`ce649b3`) drops deprecated `tag` field. Test suite green: 24 integration + 11 unit, clippy + fmt clean.
 
 ## Active arc
 
-**Sprint 4 closed.** All three deliverables shipped + verified end-to-end against ettsmart.se on 2026-05-06: `pagekit list` shows 8 fragments × 35 pages, `check` clean, `check --strict` returns 8/8 uniform across all marker regions, `doctor` no issues. Live site (`https://ettsmart.se/`, `/kista/`, `/sv/`) returns HTTP 200 at all depths. The slug uses semantic variant names (`nav-default`, `nav-transparent`, `nav-sv-default`, `nav-sv-transparent`, `footer`, `footer-sv`, `sub-nav-kista`, `sub-nav-sollentuna`) — equivalent to what `--split-variants` produces with numerical naming. **D2 transforms not exercised** because ettsmart.se's fragments use absolute paths (`/locations`, `/contact`) that resolve from domain root on CF Pages — the depth-collapse use case D2 solves doesn't apply to this slug. Sprint folder: [`sprints/2026-05-variant-aware-sync/`](../sprints/2026-05-variant-aware-sync/README.md).
+**Sprint 5 — query layer (Phase 1 of multi-sprint agent-tooling trajectory).** Folder: [`sprints/2026-05-query-layer/`](../sprints/2026-05-query-layer/README.md). Two deliverables: `pagekit inventory` (one-pass index over selectors/classes/hrefs/srcs/metas, grep-friendly output) and `pagekit normalize-paths` (page-wide depth-relativization, generalizing Sprint 4 D2 from fragment-region scope to whole pages). Thesis: Rust query layer over the file tree means agent context cost scales with what changed, not what exists. Phase 2 (correctness checks: links/seo/a11y) and Phase 3 (retrieval: show/assets/preflight) are pre-named but trigger-gated on Sprint 5 thesis validation. Per `subtract-before-building.md`: build foundation first, validate, commit Phase 2 only if measurable token reduction on a real edit task.
 
 ## Decisions
 
