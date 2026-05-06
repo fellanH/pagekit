@@ -24,7 +24,7 @@ struct SharedBlock {
     content: String,
 }
 
-fn collect_html_files(
+pub(crate) fn collect_html_files(
     root: &Path,
     fragments_dir: &Path,
     exclude_dirs: &[String],

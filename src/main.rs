@@ -1,3 +1,4 @@
+mod check_strict;
 mod config;
 mod extract;
 mod init;
@@ -34,7 +35,16 @@ enum Cmd {
     /// Watch fragments/ for changes, sync on save
     Watch,
     /// Dry-run: exit 1 if any file is stale or has malformed markers
-    Check,
+    Check {
+        /// Variance check: hash each marker region per page, report names
+        /// whose content differs across pages. Exit 0 = all uniform,
+        /// exit 2 = variance detected.
+        #[arg(long)]
+        strict: bool,
+        /// Limit the strict check to a single fragment name.
+        #[arg(long, value_name = "NAME")]
+        name: Option<String>,
+    },
     /// Create a new HTML page with marker pairs for all fragments
     Init {
         /// Filename to create (e.g. about.html)
@@ -70,7 +80,17 @@ fn main() -> Result<()> {
             );
             fragments::watch::run(&root, &config.core)?;
         }
-        Cmd::Check => {
+        Cmd::Check { strict, name } => {
+            if strict {
+                let code = check_strict::run_check_strict(&root, &config, name.as_deref())?;
+                if code != 0 {
+                    std::process::exit(code);
+                }
+                return Ok(());
+            }
+            if name.is_some() {
+                eprintln!("pagekit: --name requires --strict; ignoring");
+            }
             let issues = fragments::check_all(&root, &config.core)?;
             if issues.is_empty() {
                 println!("pagekit: all files up to date");

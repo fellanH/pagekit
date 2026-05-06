@@ -66,6 +66,15 @@ fn run_sync(dir: &Path) -> std::process::Output {
         .expect("failed to run pagekit")
 }
 
+fn run_check_strict(dir: &Path, extra: &[&str]) -> std::process::Output {
+    let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"));
+    cmd.arg(dir.to_str().unwrap()).arg("check").arg("--strict");
+    for arg in extra {
+        cmd.arg(arg);
+    }
+    cmd.output().expect("failed to run pagekit")
+}
+
 // --- Init command ---
 
 #[test]
@@ -380,6 +389,126 @@ tag = "aside"
     assert!(
         root.join("_fragments/sidebar.html").exists(),
         "user candidate should fire"
+    );
+}
+
+// --- check --strict ---
+
+#[test]
+fn check_strict_uniform_passes() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    let nav = "<!-- fragment:nav -->\n<nav><a href=\"/\">Home</a></nav>\n<!-- /fragment:nav -->";
+    let footer = "<!-- fragment:footer -->\n<footer>(c) Site</footer>\n<!-- /fragment:footer -->";
+    let page = |body: &str| {
+        format!("<!DOCTYPE html><html><body>\n{nav}\n<main>{body}</main>\n{footer}\n</body></html>")
+    };
+
+    fs::write(root.join("a.html"), page("A")).unwrap();
+    fs::write(root.join("b.html"), page("B")).unwrap();
+    fs::write(root.join("c.html"), page("C")).unwrap();
+
+    let output = run_check_strict(root, &[]);
+    assert!(
+        output.status.success(),
+        "expected exit 0 for uniform site, got {:?}\nstdout: {}\nstderr: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("nav"));
+    assert!(stdout.contains("footer"));
+    assert!(stdout.contains("✓ uniform"));
+    assert!(!stdout.contains("⚠ varies"));
+}
+
+#[test]
+fn check_strict_detects_variance() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    let nav_a =
+        "<!-- fragment:nav -->\n<nav><a class=\"default\">Home</a></nav>\n<!-- /fragment:nav -->";
+    let nav_b = "<!-- fragment:nav -->\n<nav><a class=\"transparent\">Home</a></nav>\n<!-- /fragment:nav -->";
+    let page = |nav: &str, body: &str| {
+        format!("<!DOCTYPE html><html><body>\n{nav}\n<main>{body}</main>\n</body></html>")
+    };
+
+    fs::write(root.join("a.html"), page(nav_a, "A")).unwrap();
+    fs::write(root.join("b.html"), page(nav_a, "B")).unwrap();
+    fs::write(root.join("c.html"), page(nav_b, "C")).unwrap();
+    fs::write(root.join("d.html"), page(nav_b, "D")).unwrap();
+
+    let output = run_check_strict(root, &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "expected exit 2 on variance, got {:?}\nstdout: {}\nstderr: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("⚠ varies"),
+        "stdout missing variance row:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("nav has 2 variants"),
+        "stdout missing per-fragment variant block:\n{stdout}"
+    );
+    // Both 8-hex hashes appear and they differ.
+    let hash_count = stdout.matches("hash ").count();
+    assert!(
+        hash_count >= 2,
+        "expected ≥2 'hash ' lines, got {hash_count}:\n{stdout}"
+    );
+}
+
+#[test]
+fn check_strict_with_name_filter() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    // nav uniform across all 3 pages; footer varies between page1 and others.
+    let nav = "<!-- fragment:nav -->\n<nav>HOME</nav>\n<!-- /fragment:nav -->";
+    let footer_a = "<!-- fragment:footer -->\n<footer>A</footer>\n<!-- /fragment:footer -->";
+    let footer_b = "<!-- fragment:footer -->\n<footer>B</footer>\n<!-- /fragment:footer -->";
+
+    let page = |footer: &str, body: &str| {
+        format!("<!DOCTYPE html><html><body>\n{nav}\n<main>{body}</main>\n{footer}\n</body></html>")
+    };
+
+    fs::write(root.join("a.html"), page(footer_a, "A")).unwrap();
+    fs::write(root.join("b.html"), page(footer_b, "B")).unwrap();
+    fs::write(root.join("c.html"), page(footer_b, "C")).unwrap();
+
+    // Without filter: footer variance trips exit 2.
+    let unfiltered = run_check_strict(root, &[]);
+    assert_eq!(
+        unfiltered.status.code(),
+        Some(2),
+        "unfiltered run should detect footer variance"
+    );
+
+    // With --name nav: footer variance is not in scope, exit 0.
+    let filtered = run_check_strict(root, &["--name", "nav"]);
+    assert!(
+        filtered.status.success(),
+        "expected exit 0 with --name nav, got {:?}\nstdout: {}",
+        filtered.status,
+        String::from_utf8_lossy(&filtered.stdout),
+    );
+    let stdout = String::from_utf8_lossy(&filtered.stdout);
+    assert!(
+        stdout.contains("nav"),
+        "filter run missing nav row:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("footer"),
+        "filter run leaked footer:\n{stdout}"
     );
 }
 
