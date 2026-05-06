@@ -1,12 +1,20 @@
 # pagekit
 
-Binary ships. Sprints 4-6 closed. Test suite green: 50 integration + 35 unit, clippy + fmt clean.
+Binary ships. Sprints 4-7 closed; agent-tooling trajectory complete. Test suite green: 59 integration + 46 unit, clippy + fmt clean.
 
 ## Active arc
 
-**Sprint 7 — retrieval + composition (Phase 3, closes agent-tooling trajectory).** Folder: [`sprints/2026-05-retrieval-composition/`](../sprints/2026-05-retrieval-composition/README.md). Three deliverables: `pagekit assets` (HTML+CSS reference graph, hash/byte/type manifest, closes the CSS-loaded-orphan gap from Sprint 6 D1), `pagekit show <name>` (fragment + classes + asset bundle in one report), `pagekit preflight` (composes check + doctor + links + seo + a11y into a single go-live gate). After this lands, pagekit is feature-complete for the strategic exchange's Phase 1-3 plan.
+**Sprint 7 closed (Phase 3, agent-tooling trajectory complete).** All three deliverables shipped: `pagekit assets` (commit `a70313b`, HTML+CSS reference graph closing the CSS-loaded-orphan gap), `pagekit show <name>` (commit `8fb8a90`, fragment+classes+URLs bundle), `pagekit preflight` (commit `a642ecb`, single go-live gate). Sprint folder: [`sprints/2026-05-retrieval-composition/`](../sprints/2026-05-retrieval-composition/README.md).
 
-**Sprint 6 closed (Phase 2).** All four deliverables shipped: `pagekit links`, `pagekit seo`, `pagekit a11y`, generalized `check --strict --selector`. Sprint folder: [`sprints/2026-05-correctness-checks/`](../sprints/2026-05-correctness-checks/README.md).
+**Pagekit is feature-complete for the Phase 1-3 plan from the strategic exchange.** Full surface:
+
+- **Build/edit:** `init`, `extract`, `extract --split-variants`, `sync`, `watch`, `normalize-paths`, `list`, `config`
+- **Read (token-efficient):** `inventory`, `show`, `assets`
+- **Verify:** `check`, `check --strict`, `check --strict --selector`, `doctor`, `links`, `seo`, `a11y`, `preflight`
+
+Phase 4 candidates (image dims, semantic variant naming, framework profiles, expected_origin config) remain trigger-gated. No active sprint planned.
+
+**Sprint 6 closed (Phase 2).** `pagekit links`, `pagekit seo`, `pagekit a11y`, generalized `check --strict --selector`. Sprint folder: [`sprints/2026-05-correctness-checks/`](../sprints/2026-05-correctness-checks/README.md).
 
 **Sprint 5 closed (Phase 1).** Both deliverables shipped: `pagekit inventory` (commit `cdfd2e7`) and `pagekit normalize-paths` (commit `efc39a7`). Sprint folder: [`sprints/2026-05-query-layer/`](../sprints/2026-05-query-layer/README.md).
 
@@ -21,8 +29,9 @@ Binary ships. Sprints 4-6 closed. Test suite green: 50 integration + 35 unit, cl
 
 ## Backlog
 
-- **Phase 3 — retrieval + composition (Sprint 7 candidate)** — `pagekit show <component>` (bundle: fragment + CSS rules + assets in one report), `pagekit assets` (manifest with hashes, dims, orphan detection, semantic aliases for hash-named files; naturally closes the CSS-loaded-orphan gap that `pagekit links` documents), `pagekit preflight` (composes links + seo + a11y + check + doctor into a single go-live gate). **Trigger:** consumer demand for component-level token efficiency, OR a real go-live wanting the one-call gate. **Owner:** chad-pagekit.
-- **`[seo].expected_origin` config option** — `pagekit seo` currently flags scheme/host MISMATCH within in-HTML canonicals (catches mixed www/apex declarations). It does NOT catch the case where every page declares the same canonical but the live deploy serves a different host (ettsmart.se's www→apex pattern). Adding `[seo].expected_origin = "https://ettsmart.se"` to fragments.toml lets the check fire on this case. **Trigger:** next consumer hits the same deploy-vs-HTML mismatch.
+- **Image dimension extraction in `pagekit assets`** — assets manifest currently emits hash + bytes + type. Dims (width × height per image) would unlock LCP analysis, responsive-image gap detection, and HTML img-tag dim auto-fill. Needs an image-header parser; lightweight `imagesize` crate handles PNG/JPEG/GIF/WebP/AVIF/SVG without full decoding. **Trigger:** felixhellstrom.com's image-dim friction returns OR a consumer asks for LCP work.
+- **CSS-rule extraction in `pagekit show`** — current `show` outputs class names; agent grep CSS to find the rules. A `--with-css` flag could return the matched rules inline. Needs lenient CSS parsing. **Trigger:** consumer asks for full component bundle.
+- **`[seo].expected_origin` config option** — `pagekit seo` flags scheme/host MISMATCH within in-HTML canonicals (mixed www/apex declarations). It does NOT catch the deploy-vs-HTML mismatch (ettsmart.se's www→apex pattern). Adding `[seo].expected_origin = "https://ettsmart.se"` lets the check fire on this case. **Trigger:** next consumer hits the same deploy-vs-HTML mismatch.
 - **Framework-export profiles** — Webflow + Bootstrap-class profiles. Speculative; needs a third consumer pattern.
 - **D2 transforms — second-consumer test** — Sprint 4 D2 + Sprint 5 D2 share rewriting logic; neither exercised against a real consumer that needs depth-relative output (ettsmart.se uses absolute paths intentionally). Validate against file:// preview, sub-path deploy, or non-root static export when one surfaces.
 - **Semantic variant naming for `extract --split-variants`** — current scope emits numerical names (`nav-1`, `nav-2`). ettsmart.se demonstrates the manual end-state (`nav-default`, `nav-transparent`) is more readable. Auto-detect from class diffs. **Trigger:** when numerical naming costs a manual rename pass on a real consumer.
