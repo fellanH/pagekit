@@ -4,7 +4,7 @@ Stages 1, 2, and 3 done. Binary ships, integration suite green (13/13), `extract
 
 ## Active arc
 
-Idle. Next move is consumer-driven: wire `pagekit` into the next vanilla-HTML site that needs it (felixhellstrom.com is integrated; ettsmart.se in progress per workspace charter), or pick up Stage 3+ work when a real site surfaces the need.
+**Sprint 4 — variant-aware sync.** Folder: [`sprints/2026-05-variant-aware-sync/`](../sprints/2026-05-variant-aware-sync/README.md). Three deliverables sequenced D1 → D2 → D3: `pagekit check --strict` (visibility), path-relative sync transforms (depth-collapse), `pagekit extract --split-variants` (granular fragment scaffolding). Driven by ettsmart.se's blocked sync (Webflow `w-variant-*` classes inside marker regions, per-depth relative paths) and the n=2 read that every future Webflow-export consumer hits the same wall.
 
 ## Decisions
 
