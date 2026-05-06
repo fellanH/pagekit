@@ -75,6 +75,14 @@ fn run_inventory(dir: &Path) -> std::process::Output {
         .expect("failed to run pagekit")
 }
 
+fn run_normalize_paths(dir: &Path) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
+        .arg(dir.to_str().unwrap())
+        .arg("normalize-paths")
+        .output()
+        .expect("failed to run pagekit")
+}
+
 fn run_sync(dir: &Path) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
         .arg(dir.to_str().unwrap())
@@ -1015,4 +1023,99 @@ fn inventory_grep_pipeline_returns_expected_pages() {
         vec!["/a.html", "/c.html"],
         "grep-by-class should return exactly the pages declaring it"
     );
+}
+
+// --- normalize-paths ---
+
+#[test]
+fn normalize_paths_rewrites_per_depth() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    let body = r#"<a href="/locations">Loc</a><img src="/img/a.png">"#;
+    let page = |body: &str| format!("<!DOCTYPE html><html><body>{body}</body></html>");
+
+    fs::write(root.join("index.html"), page(body)).unwrap();
+    fs::create_dir_all(root.join("foo")).unwrap();
+    fs::write(root.join("foo/index.html"), page(body)).unwrap();
+    fs::create_dir_all(root.join("foo/bar")).unwrap();
+    fs::write(root.join("foo/bar/index.html"), page(body)).unwrap();
+
+    let output = run_normalize_paths(root);
+    assert!(
+        output.status.success(),
+        "normalize-paths failed: {:?}",
+        output
+    );
+
+    let depth0 = fs::read_to_string(root.join("index.html")).unwrap();
+    assert!(
+        depth0.contains(r#"href="locations""#),
+        "depth-0 page must strip leading slash:\n{depth0}"
+    );
+    assert!(depth0.contains(r#"src="img/a.png""#));
+
+    let depth1 = fs::read_to_string(root.join("foo/index.html")).unwrap();
+    assert!(
+        depth1.contains(r#"href="../locations""#),
+        "depth-1 page must prepend ../:\n{depth1}"
+    );
+    assert!(depth1.contains(r#"src="../img/a.png""#));
+
+    let depth2 = fs::read_to_string(root.join("foo/bar/index.html")).unwrap();
+    assert!(
+        depth2.contains(r#"href="../../locations""#),
+        "depth-2 page must prepend ../../:\n{depth2}"
+    );
+}
+
+#[test]
+fn normalize_paths_idempotent() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::create_dir_all(root.join("foo")).unwrap();
+    fs::write(
+        root.join("foo/index.html"),
+        r#"<html><body><a href="/x">x</a></body></html>"#,
+    )
+    .unwrap();
+
+    let _ = run_normalize_paths(root);
+    let after_first = fs::read_to_string(root.join("foo/index.html")).unwrap();
+
+    let _ = run_normalize_paths(root);
+    let after_second = fs::read_to_string(root.join("foo/index.html")).unwrap();
+
+    assert_eq!(after_first, after_second, "second run must be a no-op");
+    assert!(after_first.contains(r#"href="../x""#));
+}
+
+#[test]
+fn normalize_paths_skips_externals() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    let html = r##"<html><body>
+<a href="https://example.com/x">ext</a>
+<a href="mailto:x@example.com">mail</a>
+<a href="tel:+12345">tel</a>
+<a href="#anchor">anchor</a>
+<img src="data:image/png;base64,xx">
+<a href="../sibling.html">rel</a>
+</body></html>"##;
+
+    fs::create_dir_all(root.join("foo")).unwrap();
+    fs::write(root.join("foo/index.html"), html).unwrap();
+
+    let output = run_normalize_paths(root);
+    assert!(output.status.success());
+
+    let after = fs::read_to_string(root.join("foo/index.html")).unwrap();
+    assert!(after.contains(r#"href="https://example.com/x""#));
+    assert!(after.contains(r#"href="mailto:x@example.com""#));
+    assert!(after.contains(r#"href="tel:+12345""#));
+    assert!(after.contains(r##"href="#anchor""##));
+    assert!(after.contains(r#"src="data:image/png;base64,xx""#));
+    assert!(after.contains(r#"href="../sibling.html""#));
 }

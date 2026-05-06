@@ -3,6 +3,7 @@ mod config;
 mod extract;
 mod init;
 mod inventory;
+mod normalize;
 mod transforms;
 
 use anyhow::{Context, Result};
@@ -74,6 +75,11 @@ enum Cmd {
         #[arg(long, value_name = "PATH")]
         save: Option<PathBuf>,
     },
+    /// Rewrite root-absolute paths (href/src) in every page to be
+    /// relative to each page's depth. Idempotent. Defaults
+    /// `path_root="/"` when no `[transforms]` config is present —
+    /// running the command is the opt-in.
+    NormalizePaths,
 }
 
 fn main() -> Result<()> {
@@ -156,6 +162,9 @@ fn main() -> Result<()> {
         }
         Cmd::Inventory { save } => {
             inventory::run_inventory(&root, &config, save)?;
+        }
+        Cmd::NormalizePaths => {
+            normalize::normalize_paths(&root, &config)?;
         }
     }
     Ok(())
