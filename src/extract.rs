@@ -13,7 +13,14 @@ use walkdir::WalkDir;
 
 /// A DOM block found shared across pages, ready to extract into a fragment.
 struct SharedBlock {
+    /// Fragment-file name. Equal to `base_name` for single-variant blocks;
+    /// `base_name-N` (1-indexed by descending frequency) under
+    /// `--split-variants` when a candidate has multiple distinct contents.
     name: String,
+    /// Candidate name (e.g. "nav") shared by all variants of the same
+    /// candidate. Used for idempotency checks so re-running across modes
+    /// doesn't double-wrap a page that already carries a sibling marker.
+    base_name: String,
     /// CSS selector used to find this element in parsed pages (preserved
     /// so per-page presence checks use the original selector, not a
     /// hardcoded mapping from tag back to class).
@@ -22,6 +29,32 @@ struct SharedBlock {
     /// fragment file and used to identify the matching element among
     /// same-selector siblings on a given page.
     content: String,
+}
+
+/// True if `src` already carries a marker for the candidate `base` —
+/// either `<!-- prefix:base -->` (plain extract) or
+/// `<!-- prefix:base-<digits> -->` (a sibling variant). Used so a re-run
+/// in either mode skips pages already wrapped by the other mode rather
+/// than nesting markers.
+fn page_has_base_marker(src: &str, prefix: &str, base: &str) -> bool {
+    let needle = format!("<!-- {prefix}:{base}");
+    let mut cursor = 0;
+    while let Some(pos) = src[cursor..].find(&needle) {
+        let after = cursor + pos + needle.len();
+        let rest = &src[after..];
+        if let Some(stripped) = rest.strip_prefix(" -->") {
+            let _ = stripped;
+            return true;
+        }
+        if let Some(rest) = rest.strip_prefix('-') {
+            let digit_end = rest.chars().take_while(|c| c.is_ascii_digit()).count();
+            if digit_end > 0 && rest[digit_end..].starts_with(" -->") {
+                return true;
+            }
+        }
+        cursor = after;
+    }
+    false
 }
 
 pub(crate) fn collect_html_files(
@@ -64,8 +97,7 @@ fn rewrite_page(src: &str, blocks: &[SharedBlock], prefix: &str) -> Result<Strin
     // this page.
     let mut by_selector: HashMap<String, Vec<(usize, String)>> = HashMap::new();
     for block in blocks {
-        let open_marker = format!("<!-- {}:{} -->", prefix, block.name);
-        if src.contains(&open_marker) {
+        if page_has_base_marker(src, prefix, &block.base_name) {
             continue;
         }
         let scraper_sel = match ScraperSelector::parse(&block.selector) {
@@ -143,7 +175,14 @@ fn rewrite_page(src: &str, blocks: &[SharedBlock], prefix: &str) -> Result<Strin
 
 /// Scan HTML files in a site directory, detect shared DOM blocks,
 /// extract them to <fragments_dir>/*.html, and insert marker comments.
-pub fn extract_fragments(root: &Path, config: &Config) -> Result<usize> {
+///
+/// `split_variants`: when true, candidates with multiple distinct content
+/// variants on ≥2 pages each emit one fragment file per variant
+/// (`<name>-1.html` … `<name>-N.html`, ranked by descending page count)
+/// and per-page markers point at the variant matching that page's
+/// content. When false, only the dominant variant ships and a one-line
+/// warning surfaces per multi-variant candidate.
+pub fn extract_fragments(root: &Path, config: &Config, split_variants: bool) -> Result<usize> {
     let fragments_dir = root.join(&config.core.fragments_dir);
 
     let html_files = collect_html_files(
@@ -181,6 +220,7 @@ pub fn extract_fragments(root: &Path, config: &Config) -> Result<usize> {
     }
 
     let mut shared_blocks: Vec<SharedBlock> = Vec::new();
+    let mut variant_warnings: Vec<String> = Vec::new();
 
     for (name, sel_str) in &candidates {
         let sel = match ScraperSelector::parse(sel_str) {
@@ -201,15 +241,54 @@ pub fn extract_fragments(root: &Path, config: &Config) -> Result<usize> {
             }
         }
 
-        if let Some((content, count)) = html_to_count.into_iter().max_by_key(|(_, v)| *v) {
-            if count >= 2 {
+        // Variants are distinct contents present on ≥2 pages each. Sort
+        // by descending page count, then ascending content for stable
+        // ordering when counts tie.
+        let mut variants: Vec<(String, usize)> = html_to_count
+            .into_iter()
+            .filter(|(_, count)| *count >= 2)
+            .collect();
+        variants.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+        match variants.len() {
+            0 => {}
+            1 => {
+                let (content, _) = variants.into_iter().next().unwrap();
                 shared_blocks.push(SharedBlock {
                     name: name.clone(),
+                    base_name: name.clone(),
                     selector: sel_str.clone(),
                     content,
                 });
             }
+            n if split_variants => {
+                for (i, (content, _)) in variants.into_iter().enumerate() {
+                    shared_blocks.push(SharedBlock {
+                        name: format!("{}-{}", name, i + 1),
+                        base_name: name.clone(),
+                        selector: sel_str.clone(),
+                        content,
+                    });
+                }
+                let _ = n;
+            }
+            n => {
+                let (content, _) = variants.into_iter().next().unwrap();
+                shared_blocks.push(SharedBlock {
+                    name: name.clone(),
+                    base_name: name.clone(),
+                    selector: sel_str.clone(),
+                    content,
+                });
+                variant_warnings.push(format!(
+                    "  Note: {name} has {n} variants on ≥2 pages — keeping dominant only. Use --split-variants to emit all.",
+                ));
+            }
         }
+    }
+
+    for w in &variant_warnings {
+        println!("{w}");
     }
 
     if shared_blocks.is_empty() {

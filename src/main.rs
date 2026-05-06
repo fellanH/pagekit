@@ -52,7 +52,12 @@ enum Cmd {
         file: String,
     },
     /// Scan pages, detect shared blocks, extract to fragments/ and insert markers
-    Extract,
+    Extract {
+        /// Emit one fragment file per detected content variant; rewrite
+        /// markers in source pages to match each page's variant.
+        #[arg(long)]
+        split_variants: bool,
+    },
     /// List every fragment and how many pages reference it
     List,
     /// Print the effective config (defaults merged with fragments.toml)
@@ -120,8 +125,8 @@ fn main() -> Result<()> {
         Cmd::Init { file } => {
             init::init_page(&root, &file, &config)?;
         }
-        Cmd::Extract => {
-            let n = extract::extract_fragments(&root, &config)?;
+        Cmd::Extract { split_variants } => {
+            let n = extract::extract_fragments(&root, &config, split_variants)?;
             if n > 0 {
                 println!("pagekit: extraction complete, {n} page(s) updated");
             }

@@ -58,6 +58,15 @@ fn run_extract(dir: &Path) -> std::process::Output {
         .expect("failed to run pagekit")
 }
 
+fn run_extract_split(dir: &Path) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
+        .arg(dir.to_str().unwrap())
+        .arg("extract")
+        .arg("--split-variants")
+        .output()
+        .expect("failed to run pagekit")
+}
+
 fn run_sync(dir: &Path) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
         .arg(dir.to_str().unwrap())
@@ -710,4 +719,158 @@ fn sync_delegated_to_fragments_lib() {
     let result = fs::read_to_string(root.join("index.html")).unwrap();
     assert!(result.contains("<meta charset=\"utf-8\">"));
     assert!(!result.contains("\nold\n"));
+}
+
+// --- extract --split-variants ---
+
+fn variant_site(root: &Path) -> (&'static str, &'static str) {
+    // Two distinct nav variants, three pages each. Six total — well above
+    // the ≥2 page threshold for both. Footer is uniform and should keep
+    // the plain `footer` name even with --split-variants on.
+    let nav_a = "<nav class=\"transparent\"><a href=\"/\">Home</a></nav>";
+    let nav_b = "<nav class=\"default\"><a href=\"/\">Home</a></nav>";
+    let footer = "<footer>(c) SiteCo</footer>";
+    let page = |nav: &str, slug: &str| {
+        format!("<!DOCTYPE html><html><body>{nav}<main>{slug}</main>{footer}</body></html>")
+    };
+
+    for (name, nav) in [
+        ("a.html", nav_a),
+        ("b.html", nav_a),
+        ("c.html", nav_a),
+        ("d.html", nav_b),
+        ("e.html", nav_b),
+        ("f.html", nav_b),
+    ] {
+        fs::write(root.join(name), page(nav, name)).unwrap();
+    }
+
+    (nav_a, nav_b)
+}
+
+#[test]
+fn extract_split_variants_emits_n_files() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let (nav_a, nav_b) = variant_site(root);
+
+    let output = run_extract_split(root);
+    assert!(
+        output.status.success(),
+        "extract --split-variants failed: {:?}",
+        output
+    );
+
+    let frag_1 =
+        fs::read_to_string(root.join("_fragments/nav-1.html")).expect("nav-1.html should exist");
+    let frag_2 =
+        fs::read_to_string(root.join("_fragments/nav-2.html")).expect("nav-2.html should exist");
+
+    // With tied counts (3 each), tiebreak is ascending content. nav_a
+    // ('class="transparent"') sorts before nav_b ('class="default"')
+    // by content? No — 'd' < 't' so nav_b ('default') comes first.
+    let variants: std::collections::HashSet<_> = [nav_a, nav_b].iter().copied().collect();
+    assert!(
+        variants.contains(frag_1.as_str()) && variants.contains(frag_2.as_str()),
+        "fragment files must each match one of the two variant contents:\n  nav-1: {frag_1}\n  nav-2: {frag_2}",
+    );
+    assert_ne!(
+        frag_1, frag_2,
+        "the two variant fragments must hold distinct content"
+    );
+
+    // Plain `nav.html` must NOT exist when split mode produced -1/-2.
+    assert!(
+        !root.join("_fragments/nav.html").exists(),
+        "plain nav.html should not be written under --split-variants"
+    );
+}
+
+#[test]
+fn extract_split_variants_rewrites_markers() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let (nav_a, _nav_b) = variant_site(root);
+
+    let output = run_extract_split(root);
+    assert!(output.status.success(), "extract failed: {:?}", output);
+
+    // Determine which variant landed in nav-1 by reading the file.
+    let frag_1 = fs::read_to_string(root.join("_fragments/nav-1.html")).unwrap();
+    let nav_1_is_a = frag_1 == nav_a;
+
+    let pages_with_a = ["a.html", "b.html", "c.html"];
+    let pages_with_b = ["d.html", "e.html", "f.html"];
+
+    let (nav_1_pages, nav_2_pages) = if nav_1_is_a {
+        (&pages_with_a, &pages_with_b)
+    } else {
+        (&pages_with_b, &pages_with_a)
+    };
+
+    for page in nav_1_pages.iter() {
+        let content = fs::read_to_string(root.join(page)).unwrap();
+        assert!(
+            content.contains("<!-- fragment:nav-1 -->"),
+            "{page} should carry nav-1 marker:\n{content}"
+        );
+        assert!(
+            !content.contains("<!-- fragment:nav-2 -->"),
+            "{page} must not carry nav-2 marker"
+        );
+    }
+    for page in nav_2_pages.iter() {
+        let content = fs::read_to_string(root.join(page)).unwrap();
+        assert!(
+            content.contains("<!-- fragment:nav-2 -->"),
+            "{page} should carry nav-2 marker:\n{content}"
+        );
+        assert!(
+            !content.contains("<!-- fragment:nav-1 -->"),
+            "{page} must not carry nav-1 marker"
+        );
+    }
+
+    // Re-run is a no-op (idempotent).
+    let before: Vec<String> = ["a.html", "d.html"]
+        .iter()
+        .map(|p| fs::read_to_string(root.join(p)).unwrap())
+        .collect();
+    let _ = run_extract_split(root);
+    let after: Vec<String> = ["a.html", "d.html"]
+        .iter()
+        .map(|p| fs::read_to_string(root.join(p)).unwrap())
+        .collect();
+    assert_eq!(before, after, "second --split-variants run must be a no-op");
+}
+
+#[test]
+fn extract_default_warns_on_variants() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    variant_site(root);
+
+    let output = run_extract(root);
+    assert!(output.status.success(), "extract failed: {:?}", output);
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("variants") && stdout.contains("--split-variants"),
+        "default extract on a multi-variant site must surface a hint:\n{stdout}"
+    );
+
+    // Without the flag, only one nav fragment ships (the dominant), and
+    // it lands at the plain name.
+    assert!(
+        root.join("_fragments/nav.html").exists(),
+        "default mode keeps the plain nav.html"
+    );
+    assert!(
+        !root.join("_fragments/nav-1.html").exists(),
+        "default mode must NOT emit suffixed variants"
+    );
+    assert!(
+        !root.join("_fragments/nav-2.html").exists(),
+        "default mode must NOT emit suffixed variants"
+    );
 }
