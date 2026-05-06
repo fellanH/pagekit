@@ -1,12 +1,14 @@
 # pagekit
 
-Binary ships. Sprints 4-5 closed. Test suite green: 30 integration + 15 unit, clippy + fmt clean.
+Binary ships. Sprints 4-6 closed. Test suite green: 50 integration + 35 unit, clippy + fmt clean.
 
 ## Active arc
 
-**Sprint 6 — correctness checks (Phase 2 of agent-tooling trajectory).** Folder: [`sprints/2026-05-correctness-checks/`](../sprints/2026-05-correctness-checks/README.md). Four deliverables: `pagekit links` (broken hrefs + orphan assets), `pagekit seo` (titles + descriptions + canonicals + OG + hreflang + JSON-LD + heading hierarchy), `pagekit a11y` (grep-able WCAG subset), generalized `check --strict --selector` (extend Sprint 4 D1 from marker-regions to arbitrary selectors). The check IS the agent-callable artifact; static guides are anti-pattern per the strategic exchange. ettsmart.se's known canonical-mismatch bug is the real-consumer demo target.
+**Sprint 6 closed (Phase 2 of agent-tooling trajectory).** All four deliverables shipped: `pagekit links` (commit `df60f99`), `pagekit seo` (commit `ddb0e72`), `pagekit a11y` (commit `ce20033`), generalized `check --strict --selector` (commit `53c46e5`). Each calibrated against ettsmart.se as the reference consumer, surfacing real findings without false-positive noise. Sprint folder: [`sprints/2026-05-correctness-checks/`](../sprints/2026-05-correctness-checks/README.md).
 
-**Sprint 5 closed (Phase 1).** Both deliverables shipped: `pagekit inventory` (commit `cdfd2e7`) and `pagekit normalize-paths` (commit `efc39a7`). Thesis validated against ettsmart.se: 35 pages in 40ms, 326KB inventory (~5x reduction), three benchmark queries each return <5KB. Real bonus: canonical query surfaced a www→apex SEO bug (now in "Real bugs surfaced" below). Sprint folder: [`sprints/2026-05-query-layer/`](../sprints/2026-05-query-layer/README.md).
+**Phase 3 candidate (Sprint 7):** retrieval + composition — `pagekit show <component>` (bundle: fragment + CSS + assets), `pagekit assets` (manifest with hashes/dims/orphan-detection/semantic-aliases — naturally closes the CSS-loaded-orphan gap surfaced by `pagekit links`), `pagekit preflight` (composes all checks into single go-live gate). Trigger-gated on consumer demand or Felix prioritization.
+
+**Sprint 5 closed (Phase 1).** Both deliverables shipped: `pagekit inventory` (commit `cdfd2e7`) and `pagekit normalize-paths` (commit `efc39a7`). Sprint folder: [`sprints/2026-05-query-layer/`](../sprints/2026-05-query-layer/README.md).
 
 ## Decisions
 
@@ -19,7 +21,8 @@ Binary ships. Sprints 4-5 closed. Test suite green: 30 integration + 15 unit, cl
 
 ## Backlog
 
-- **Phase 3 — retrieval + composition (Sprint 7 candidate)** — `pagekit show <component>` (bundle: fragment + CSS rules + assets in one report), `pagekit assets` (manifest with hashes, dims, orphan detection, semantic aliases for hash-named files), `pagekit preflight` (composes all Phase 2 checks + sync `check` + `doctor` into a single go-live gate). **Trigger:** Sprint 6 ships and a consumer asks for component-level token efficiency. **Owner:** chad-pagekit.
+- **Phase 3 — retrieval + composition (Sprint 7 candidate)** — `pagekit show <component>` (bundle: fragment + CSS rules + assets in one report), `pagekit assets` (manifest with hashes, dims, orphan detection, semantic aliases for hash-named files; naturally closes the CSS-loaded-orphan gap that `pagekit links` documents), `pagekit preflight` (composes links + seo + a11y + check + doctor into a single go-live gate). **Trigger:** consumer demand for component-level token efficiency, OR a real go-live wanting the one-call gate. **Owner:** chad-pagekit.
+- **`[seo].expected_origin` config option** — `pagekit seo` currently flags scheme/host MISMATCH within in-HTML canonicals (catches mixed www/apex declarations). It does NOT catch the case where every page declares the same canonical but the live deploy serves a different host (ettsmart.se's www→apex pattern). Adding `[seo].expected_origin = "https://ettsmart.se"` to fragments.toml lets the check fire on this case. **Trigger:** next consumer hits the same deploy-vs-HTML mismatch.
 - **Framework-export profiles** — Webflow + Bootstrap-class profiles. Speculative; needs a third consumer pattern.
 - **D2 transforms — second-consumer test** — Sprint 4 D2 + Sprint 5 D2 share rewriting logic; neither exercised against a real consumer that needs depth-relative output (ettsmart.se uses absolute paths intentionally). Validate against file:// preview, sub-path deploy, or non-root static export when one surfaces.
 - **Semantic variant naming for `extract --split-variants`** — current scope emits numerical names (`nav-1`, `nav-2`). ettsmart.se demonstrates the manual end-state (`nav-default`, `nav-transparent`) is more readable. Auto-detect from class diffs. **Trigger:** when numerical naming costs a manual rename pass on a real consumer.
@@ -27,7 +30,11 @@ Binary ships. Sprints 4-5 closed. Test suite green: 30 integration + 15 unit, cl
 
 ## Real bugs surfaced (not pagekit's responsibility)
 
-- **ettsmart.se canonical mismatch** — every page declares `canonical=https://www.ettsmart.se/...` but the live site redirects www→apex. Surfaced 2026-05-06 by `pagekit inventory` running the canonical query on the slug. Owner: chad-ettsmart_se. (Exactly the kind of finding Phase 2's `pagekit seo` would auto-flag.)
+Findings from running pagekit's checks against ettsmart.se on 2026-05-06. Surfaced naturally; owner: chad-ettsmart_se.
+
+- **`pagekit links`** — 6 broken internal links (404.html and contact form referencing stale Webflow paths: `_assets/site/css/main.css`, `_assets/site.css`, `_assets/site.js`, `_assets/hubspot/forms/embed/v2.js`)
+- **`pagekit seo`** — 3 missing canonicals (`/thank-you/`, `/sv/thank-you/`, `/test/`); 11 missing meta descriptions on SV subpages; 8 multiple-H1 warnings on Webflow templates; 25 missing OG-tag warnings; 1 duplicate-description; canonical www→apex mismatch (declared canonicals all use `www.ettsmart.se` but live deploy serves apex — needs `expected_origin` config to auto-flag, see backlog)
+- **`pagekit a11y`** — 4 unlabeled honeypot anti-spam fields (`<input name="website">` without proper hiding) on contact forms
 
 ## Blocked
 
