@@ -1,6 +1,8 @@
 mod a11y;
+mod assets;
 mod check_strict;
 mod config;
+mod css_refs;
 mod extract;
 mod init;
 mod inventory;
@@ -103,6 +105,16 @@ enum Cmd {
     /// focus styles, and dynamic ARIA need rendering and are NOT
     /// covered. Pass means "cheap checks pass", not "WCAG compliant".
     A11y,
+    /// Asset reference graph (HTML hrefs/srcs/srcsets + CSS url()
+    /// references). TSV manifest covering hash, byte count, MIME type,
+    /// referencing pages and stylesheets, and orphan flag for
+    /// unreferenced files. Closes the CSS-loaded-asset gap that
+    /// `pagekit links` documents.
+    Assets {
+        /// Save manifest to file instead of stdout. Prints summary line.
+        #[arg(long, value_name = "PATH")]
+        save: Option<PathBuf>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -217,6 +229,9 @@ fn main() -> Result<()> {
             if code != 0 {
                 std::process::exit(code);
             }
+        }
+        Cmd::Assets { save } => {
+            assets::run_assets(&root, &config, save)?;
         }
     }
     Ok(())

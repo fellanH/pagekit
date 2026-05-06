@@ -107,6 +107,14 @@ fn run_a11y(dir: &Path) -> std::process::Output {
         .expect("failed to run pagekit")
 }
 
+fn run_assets(dir: &Path) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
+        .arg(dir.to_str().unwrap())
+        .arg("assets")
+        .output()
+        .expect("failed to run pagekit")
+}
+
 fn run_sync(dir: &Path) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
         .arg(dir.to_str().unwrap())
@@ -1733,5 +1741,124 @@ fn check_strict_selector_invalid_css_is_error() {
     assert!(
         stderr.contains("invalid CSS selector"),
         "should name the error class:\n{stderr}"
+    );
+}
+
+// --- assets ---
+
+#[test]
+fn assets_lists_referenced_files() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::create_dir_all(root.join("_assets")).unwrap();
+    fs::write(root.join("_assets/logo.svg"), "<svg></svg>").unwrap();
+    fs::write(
+        root.join("a.html"),
+        r#"<html><body><img src="/_assets/logo.svg"></body></html>"#,
+    )
+    .unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_assets(root);
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("/_assets/logo.svg\thash\t"));
+    assert!(stdout.contains("/_assets/logo.svg\tbytes\t"));
+    assert!(stdout.contains("/_assets/logo.svg\ttype\timage/svg+xml"));
+    assert!(stdout.contains("/_assets/logo.svg\treferenced-by\t/a.html"));
+}
+
+#[test]
+fn assets_extracts_css_url_refs() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::create_dir_all(root.join("_assets")).unwrap();
+    fs::write(
+        root.join("_assets/site.css"),
+        r#"@font-face {
+  font-family: "Foo";
+  src: url("/_assets/foo.woff2") format("woff2");
+}"#,
+    )
+    .unwrap();
+    fs::write(root.join("_assets/foo.woff2"), b"fake-font").unwrap();
+    fs::write(
+        root.join("a.html"),
+        r#"<html><head><link rel="stylesheet" href="/_assets/site.css"></head><body></body></html>"#,
+    )
+    .unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_assets(root);
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+
+    // The font is referenced ONLY from CSS, not HTML.
+    assert!(
+        stdout.contains("/_assets/foo.woff2\treferenced-from-css\t/_assets/site.css"),
+        "CSS-referenced font must be attributed to its stylesheet:\n{stdout}"
+    );
+    // The font must NOT be flagged as orphan even though no HTML refs it.
+    assert!(
+        !stdout.contains("/_assets/foo.woff2\torphan\tyes"),
+        "CSS-referenced font must not be flagged orphan:\n{stdout}"
+    );
+}
+
+#[test]
+fn assets_flags_true_orphan() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::create_dir_all(root.join("_assets")).unwrap();
+    fs::write(root.join("_assets/used.svg"), "<svg></svg>").unwrap();
+    fs::write(root.join("_assets/unused.svg"), "<svg></svg>").unwrap();
+    fs::write(
+        root.join("a.html"),
+        r#"<html><body><img src="/_assets/used.svg"></body></html>"#,
+    )
+    .unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_assets(root);
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("/_assets/unused.svg\torphan\tyes"),
+        "true orphan must be flagged:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("/_assets/used.svg\torphan\tyes"),
+        "referenced asset must not be flagged orphan:\n{stdout}"
+    );
+}
+
+#[test]
+fn assets_skips_data_urls() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::create_dir_all(root.join("_assets")).unwrap();
+    fs::write(
+        root.join("_assets/site.css"),
+        r#"a { background: url("data:image/png;base64,xx"); }"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("a.html"),
+        r#"<html><head><link rel="stylesheet" href="/_assets/site.css"></head><body></body></html>"#,
+    )
+    .unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_assets(root);
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    // No "referenced-from-css" line should mention a data: URL.
+    assert!(
+        !stdout.contains("data:"),
+        "data: URLs must be skipped:\n{stdout}"
     );
 }
