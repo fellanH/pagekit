@@ -115,6 +115,15 @@ fn run_assets(dir: &Path) -> std::process::Output {
         .expect("failed to run pagekit")
 }
 
+fn run_show(dir: &Path, name: &str) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
+        .arg(dir.to_str().unwrap())
+        .arg("show")
+        .arg(name)
+        .output()
+        .expect("failed to run pagekit")
+}
+
 fn run_sync(dir: &Path) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
         .arg(dir.to_str().unwrap())
@@ -1861,4 +1870,79 @@ fn assets_skips_data_urls() {
         !stdout.contains("data:"),
         "data: URLs must be skipped:\n{stdout}"
     );
+}
+
+// --- show ---
+
+#[test]
+fn show_returns_fragment_content() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let frag_dir = root.join("_fragments");
+    fs::create_dir_all(&frag_dir).unwrap();
+    fs::write(
+        frag_dir.join("nav.html"),
+        r#"<nav class="primary"><a href="/about" class="link">About</a><img src="/logo.svg"></nav>"#,
+    )
+    .unwrap();
+
+    let output = run_show(root, "nav");
+    assert!(
+        output.status.success(),
+        "show should succeed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("# fragment: nav"));
+    assert!(stdout.contains("## HTML"));
+    assert!(stdout.contains("## classes"));
+    assert!(stdout.contains("## referenced URLs"));
+    assert!(stdout.contains("primary"));
+    assert!(stdout.contains("/about"));
+    assert!(stdout.contains("/logo.svg"));
+}
+
+#[test]
+fn show_missing_fragment_errors() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    fs::create_dir_all(root.join("_fragments")).unwrap();
+
+    let output = run_show(root, "does-not-exist");
+    assert!(!output.status.success(), "missing fragment must error");
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("not found"),
+        "error should name the missing fragment:\n{stderr}"
+    );
+}
+
+#[test]
+fn show_dedupes_classes_alphabetical() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let frag_dir = root.join("_fragments");
+    fs::create_dir_all(&frag_dir).unwrap();
+    fs::write(
+        frag_dir.join("h.html"),
+        r#"<div class="z y x"><span class="x a"></span></div>"#,
+    )
+    .unwrap();
+
+    let output = run_show(root, "h");
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    // Classes section should list a, x, y, z each on its own line in
+    // that order (alphabetical), and "x" must appear exactly once.
+    let classes_pos = stdout.find("## classes").unwrap();
+    let urls_pos = stdout.find("## referenced URLs").unwrap();
+    let classes_section = &stdout[classes_pos..urls_pos];
+    let mut lines: Vec<&str> = classes_section
+        .lines()
+        .filter(|l| !l.starts_with("##") && !l.is_empty())
+        .collect();
+    // Drop the count line if present.
+    lines.retain(|l| !l.contains("("));
+    assert_eq!(lines, vec!["a", "x", "y", "z"]);
 }

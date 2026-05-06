@@ -9,6 +9,7 @@ mod inventory;
 mod links;
 mod normalize;
 mod seo;
+mod show;
 mod transforms;
 
 use anyhow::{Context, Result};
@@ -114,6 +115,14 @@ enum Cmd {
         /// Save manifest to file instead of stdout. Prints summary line.
         #[arg(long, value_name = "PATH")]
         save: Option<PathBuf>,
+    },
+    /// Bundle assembly: print a fragment's HTML + the deduped sorted
+    /// list of classes used + the deduped sorted list of URL
+    /// references, in one structured report. Replaces three file reads
+    /// (fragment, classes-via-grep, urls-via-grep) with one command.
+    Show {
+        /// Fragment name (no extension; resolves to <name>.html in fragments_dir).
+        name: String,
     },
 }
 
@@ -232,6 +241,12 @@ fn main() -> Result<()> {
         }
         Cmd::Assets { save } => {
             assets::run_assets(&root, &config, save)?;
+        }
+        Cmd::Show { name } => {
+            let code = show::run_show(&root, &config, &name)?;
+            if code != 0 {
+                std::process::exit(code);
+            }
         }
     }
     Ok(())
