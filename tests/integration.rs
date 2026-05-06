@@ -3,7 +3,7 @@ use std::path::Path;
 use tempfile::TempDir;
 
 fn setup_site(dir: &Path, fragments: &[(&str, &str)], pages: &[(&str, &str)]) {
-    let frag_dir = dir.join("fragments");
+    let frag_dir = dir.join("_fragments");
     fs::create_dir_all(&frag_dir).unwrap();
     for (name, content) in fragments {
         fs::write(frag_dir.join(name), content).unwrap();
@@ -38,7 +38,7 @@ fn extract_fragments_dir(config: &str) -> String {
             return val.to_string();
         }
     }
-    "fragments".to_string()
+    "_fragments".to_string()
 }
 
 fn run_init(dir: &Path, file: &str) -> std::process::Output {
@@ -171,7 +171,7 @@ fn init_creates_agents_md() {
     let output = run_init(root, "index.html");
     assert!(output.status.success());
 
-    let agents = fs::read_to_string(root.join("fragments/AGENTS.md")).unwrap();
+    let agents = fs::read_to_string(root.join("_fragments/AGENTS.md")).unwrap();
     assert!(agents.contains("fragments"));
     assert!(agents.contains("<!-- fragment:<name> -->"));
 }
@@ -183,11 +183,11 @@ fn init_does_not_overwrite_agents_md() {
 
     setup_site(root, &[("head.html", "<meta>")], &[]);
 
-    fs::write(root.join("fragments/AGENTS.md"), "custom content").unwrap();
+    fs::write(root.join("_fragments/AGENTS.md"), "custom content").unwrap();
 
     run_init(root, "index.html");
 
-    let agents = fs::read_to_string(root.join("fragments/AGENTS.md")).unwrap();
+    let agents = fs::read_to_string(root.join("_fragments/AGENTS.md")).unwrap();
     assert_eq!(agents, "custom content");
 }
 
@@ -198,7 +198,7 @@ fn target_dir_init_creates_in_subdirectory() {
 
     fs::write(root.join("fragments.toml"), "target_dir = \"www\"\n").unwrap();
 
-    let frag_dir = root.join("fragments");
+    let frag_dir = root.join("_fragments");
     fs::create_dir_all(&frag_dir).unwrap();
     fs::write(frag_dir.join("head.html"), "<meta>").unwrap();
 
@@ -276,7 +276,7 @@ fn extract_creates_fragment_file() {
     let output = run_extract(root);
     assert!(output.status.success());
 
-    let frag = fs::read_to_string(root.join("fragments/nav.html")).unwrap();
+    let frag = fs::read_to_string(root.join("_fragments/nav.html")).unwrap();
     assert!(frag.contains("<a href=\"/\">Home</a>"));
 }
 
@@ -333,7 +333,7 @@ tag = "aside"
     let output = run_extract(root);
     assert!(output.status.success(), "extract failed: {:?}", output);
 
-    let frag = fs::read_to_string(root.join("fragments/sidebar.html")).unwrap();
+    let frag = fs::read_to_string(root.join("_fragments/sidebar.html")).unwrap();
     assert!(
         frag.contains("class=\"sidebar\""),
         "sidebar fragment file missing or wrong:\n{frag}"
@@ -374,11 +374,11 @@ tag = "aside"
     assert!(output.status.success());
 
     assert!(
-        root.join("fragments/nav.html").exists(),
+        root.join("_fragments/nav.html").exists(),
         "built-in nav candidate should still fire"
     );
     assert!(
-        root.join("fragments/sidebar.html").exists(),
+        root.join("_fragments/sidebar.html").exists(),
         "user candidate should fire"
     );
 }
