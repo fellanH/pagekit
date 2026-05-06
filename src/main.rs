@@ -2,6 +2,7 @@ mod check_strict;
 mod config;
 mod extract;
 mod init;
+mod transforms;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -67,13 +68,15 @@ fn main() -> Result<()> {
 
     let config = Config::load(&root)?;
 
+    let hooks = transforms::build_hooks(&config.transforms, &config.core.target_dir);
+
     match cli.cmd.unwrap_or(Cmd::Sync) {
         Cmd::Sync => {
-            let n = fragments::sync_all(&root, &config.core)?;
+            let n = fragments::sync_all_with(&root, &config.core, &hooks)?;
             println!("pagekit: updated {n} file(s)");
         }
         Cmd::Watch => {
-            let n = fragments::sync_all(&root, &config.core)?;
+            let n = fragments::sync_all_with(&root, &config.core, &hooks)?;
             println!(
                 "pagekit: synced {n} file(s), watching {}/ …",
                 config.core.fragments_dir
@@ -91,7 +94,7 @@ fn main() -> Result<()> {
             if name.is_some() {
                 eprintln!("pagekit: --name requires --strict; ignoring");
             }
-            let issues = fragments::check_all(&root, &config.core)?;
+            let issues = fragments::check_all_with(&root, &config.core, &hooks)?;
             if issues.is_empty() {
                 println!("pagekit: all files up to date");
             } else {

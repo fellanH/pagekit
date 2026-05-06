@@ -75,6 +75,14 @@ fn run_check_strict(dir: &Path, extra: &[&str]) -> std::process::Output {
     cmd.output().expect("failed to run pagekit")
 }
 
+fn run_check(dir: &Path) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
+        .arg(dir.to_str().unwrap())
+        .arg("check")
+        .output()
+        .expect("failed to run pagekit")
+}
+
 // --- Init command ---
 
 #[test]
@@ -509,6 +517,171 @@ fn check_strict_with_name_filter() {
     assert!(
         !stdout.contains("footer"),
         "filter run leaked footer:\n{stdout}"
+    );
+}
+
+// --- D2 transforms: path-relative sync ---
+
+/// Set up a 3-page site at depths 0/1/2 with a footer fragment containing
+/// absolute paths. Returns the root path; caller writes fragments.toml.
+fn setup_depth_site(root: &Path) {
+    fs::write(
+        root.join("fragments.toml"),
+        "target_dir = \"www\"\n[transforms]\npath_root = \"/\"\n",
+    )
+    .unwrap();
+
+    let frag_dir = root.join("_fragments");
+    fs::create_dir_all(&frag_dir).unwrap();
+    fs::write(
+        frag_dir.join("footer.html"),
+        "<footer>\n<a href=\"/sollentuna/index.html\">Sollentuna</a>\n<a href=\"/about\">About</a>\n<img src=\"/img/logo.png\" alt=\"\">\n</footer>",
+    )
+    .unwrap();
+
+    let www = root.join("www");
+    fs::create_dir_all(www.join("kista")).unwrap();
+    fs::create_dir_all(www.join("sv").join("sollentuna")).unwrap();
+
+    let page = "<!DOCTYPE html><html><body>\n<!-- fragment:footer -->\n<footer>old</footer>\n<!-- /fragment:footer -->\n</body></html>";
+    fs::write(www.join("index.html"), page).unwrap(); // depth 0
+    fs::write(www.join("kista").join("index.html"), page).unwrap(); // depth 1
+    fs::write(www.join("sv").join("sollentuna").join("index.html"), page).unwrap();
+    // depth 2
+}
+
+#[test]
+fn sync_rewrites_paths_per_depth() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    setup_depth_site(root);
+
+    let output = run_sync(root);
+    assert!(
+        output.status.success(),
+        "sync failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let depth0 = fs::read_to_string(root.join("www/index.html")).unwrap();
+    assert!(
+        depth0.contains("href=\"sollentuna/index.html\""),
+        "depth 0: expected stripped leading slash, got:\n{depth0}"
+    );
+    assert!(depth0.contains("href=\"about\""));
+    assert!(depth0.contains("src=\"img/logo.png\""));
+
+    let depth1 = fs::read_to_string(root.join("www/kista/index.html")).unwrap();
+    assert!(
+        depth1.contains("href=\"../sollentuna/index.html\""),
+        "depth 1: expected one ../, got:\n{depth1}"
+    );
+    assert!(depth1.contains("src=\"../img/logo.png\""));
+
+    let depth2 = fs::read_to_string(root.join("www/sv/sollentuna/index.html")).unwrap();
+    assert!(
+        depth2.contains("href=\"../../sollentuna/index.html\""),
+        "depth 2: expected two ../, got:\n{depth2}"
+    );
+    assert!(depth2.contains("src=\"../../img/logo.png\""));
+}
+
+#[test]
+fn sync_preserves_external_urls() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("fragments.toml"),
+        "[transforms]\npath_root = \"/\"\n",
+    )
+    .unwrap();
+
+    let frag_dir = root.join("_fragments");
+    fs::create_dir_all(&frag_dir).unwrap();
+    fs::write(
+        frag_dir.join("contact.html"),
+        "<div>\n<a href=\"https://example.com\">x</a>\n<a href=\"http://example.com\">y</a>\n<a href=\"mailto:hi@example.com\">m</a>\n<a href=\"tel:+46123\">t</a>\n<a href=\"#section\">a</a>\n<a href=\"//cdn.example.com/x\">cdn</a>\n<a href=\"relative/path.html\">r</a>\n<img src=\"data:image/png;base64,xx\">\n</div>",
+    )
+    .unwrap();
+
+    fs::create_dir_all(root.join("a/b")).unwrap();
+    let page = "<!DOCTYPE html><html><body>\n<!-- fragment:contact -->\n<div>old</div>\n<!-- /fragment:contact -->\n</body></html>";
+    fs::write(root.join("a/b/page.html"), page).unwrap();
+
+    let output = run_sync(root);
+    assert!(
+        output.status.success(),
+        "sync failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let result = fs::read_to_string(root.join("a/b/page.html")).unwrap();
+    for preserved in [
+        "https://example.com",
+        "http://example.com",
+        "mailto:hi@example.com",
+        "tel:+46123",
+        "#section",
+        "//cdn.example.com/x",
+        "relative/path.html",
+        "data:image/png;base64,xx",
+    ] {
+        assert!(
+            result.contains(preserved),
+            "expected preserved value '{preserved}' in:\n{result}"
+        );
+    }
+    // No accidental ../ injection
+    assert!(
+        !result.contains("../https"),
+        "external URL was incorrectly rewritten:\n{result}"
+    );
+}
+
+#[test]
+fn sync_idempotent_with_transforms() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    setup_depth_site(root);
+
+    run_sync(root);
+    let after_first = fs::read_to_string(root.join("www/kista/index.html")).unwrap();
+
+    let second = run_sync(root);
+    assert!(second.status.success());
+
+    let after_second = fs::read_to_string(root.join("www/kista/index.html")).unwrap();
+    assert_eq!(
+        after_first, after_second,
+        "second sync produced a diff (transforms are not idempotent)"
+    );
+}
+
+#[test]
+fn check_uses_same_hooks_as_sync() {
+    // Consistency contract from fragments v0.6.0: sync and check must
+    // pass the same hooks. After a freshly-synced site, `pagekit check`
+    // (no flags) should report zero staleness.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    setup_depth_site(root);
+
+    let sync_out = run_sync(root);
+    assert!(sync_out.status.success());
+
+    let check_out = run_check(root);
+    assert!(
+        check_out.status.success(),
+        "check should pass after sync, got status {:?}\nstdout: {}\nstderr: {}",
+        check_out.status,
+        String::from_utf8_lossy(&check_out.stdout),
+        String::from_utf8_lossy(&check_out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&check_out.stdout);
+    assert!(
+        stdout.contains("up to date"),
+        "expected 'up to date' message, got:\n{stdout}"
     );
 }
 

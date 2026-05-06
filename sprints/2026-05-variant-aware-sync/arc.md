@@ -4,14 +4,16 @@ Sprint focus pointer; full scope in [`README.md`](README.md).
 
 ## Now
 
-D2 — path-relative sync transforms. Next dispatch. `[transforms]` config + per-depth path rewriting at sync time, wired via fragments v0.6.0's `SyncHook` trait.
+D3 — `pagekit extract --split-variants`. Next dispatch. Emit N variant fragment files + rewrite source markers so per-content variation stops requiring manual triage.
 
 ## Done
 
 - D1 — `pagekit check --strict` shipped. Subcommand is `check --strict [--name <fragment>]`; FNV-1a 64→32 hex hash per marker region, exit 0/2 on uniform/varies. Smoke-tested against ettsmart.se (reports nav 4 variants — dominant 10/4 split is the transparent vs default class — plus footer and sub-nav-sollentuna variance D2 will partly collapse). 13 prior + 3 new integration + 4 new unit tests passing.
+- D2 — path-relative sync transforms shipped. `[transforms]` section with `path_root` + `attrs` (default `["href", "src"]`); `DepthRelativizer: SyncHook` walks fragment content with lol_html and rewrites attrs whose value starts with `path_root` to per-depth relative paths. Both `Cmd::Sync` and `Cmd::Check` (non-strict) wired through `sync_all_with` / `check_all_with` with the same hook stack (consistency contract). 4 new integration + 7 new unit tests passing; smoke tested on synthetic 3-page site at depths 0/1/2 (correct `../` counts, externals preserved, idempotent, check clean).
 
 ## Up next
 
+- D2 follow-up: `Cmd::Watch` reactive resyncs still call the hookless `fragments::watch::run`, so transforms only apply on the initial sync inside watch. Needs a `watch::run_with(hooks)` upstream in fragments core; out of scope for D2 spec but flagged here so D3 or a follow-up worker picks it up. Workaround for now: re-run `pagekit sync` after fragment edits when watching a transformed site.
 - D3 — `pagekit extract --split-variants` (emit N variant fragment files + rewrite source markers)
 
 ## Decisions captured during scoping

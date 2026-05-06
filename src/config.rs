@@ -6,9 +6,9 @@ use std::path::Path;
 const CONFIG_FILE: &str = "fragments.toml";
 
 /// pagekit config: composes fragments core (text-sync primitive) with
-/// HTML-specific options (extract candidates). Both layers parse from the
-/// same `fragments.toml` file via flatten — users see one flat schema,
-/// pagekit internally has two layers.
+/// HTML-specific options (extract candidates, sync-time transforms). All
+/// layers parse from the same `fragments.toml` file via flatten — users
+/// see one flat schema, pagekit internally has multiple layers.
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Config {
@@ -18,6 +18,9 @@ pub struct Config {
     pub core: fragments::Config,
     /// HTML-specific extract configuration.
     pub extract: ExtractConfig,
+    /// Sync-time content transforms (path rewriting, future variant
+    /// selection). Empty section ⇒ no hooks installed ⇒ unchanged behavior.
+    pub transforms: TransformsConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -28,6 +31,21 @@ pub struct ExtractConfig {
     /// .navbar, .site-header, .site-footer) — adding one doesn't remove
     /// the others.
     pub candidates: Vec<ExtractCandidate>,
+}
+
+/// Sync-time transform config. With `path_root` unset, no transforms run
+/// and behavior matches plain `fragments::sync_all`.
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(default)]
+pub struct TransformsConfig {
+    /// Absolute prefix that fragment files use for site-internal paths
+    /// (typically `"/"`). When set, attrs in `attrs` whose value starts
+    /// with this prefix are rewritten to be relative to the destination
+    /// page's depth from `target_dir`.
+    pub path_root: Option<String>,
+    /// HTML attributes to rewrite. Empty ⇒ defaults to `["href", "src"]`
+    /// when `path_root` is set; ignored otherwise.
+    pub attrs: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
