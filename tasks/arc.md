@@ -21,7 +21,6 @@ Binary ships. Sprint 4 closed: D1+D2+D3 landed (commits `597478e`, `a75a4bb`, `6
 - **D2 transforms — second-consumer test** — D2 was sprint scope but not exercised on ettsmart.se (slug uses absolute paths on CF Pages, no depth-collapse needed). Validate against a consumer that needs path-relative output: file:// preview, sub-path deploy, or static export to a non-root mount. **Trigger:** next consumer that needs depth-relative paths.
 - **Semantic variant naming for `extract --split-variants`** — current scope emits numerical names (`nav-1`, `nav-2`). ettsmart.se demonstrates the manual end-state (`nav-default`, `nav-transparent`) is more readable. Auto-detect from class diffs (e.g. `class="navbar1_menu transparent"` → `nav-transparent`). **Trigger:** when numerical naming costs a manual rename pass on a real consumer.
 - **Migration ergonomics for `--split-variants`** — current scope is fresh-run only. A user who previously ran plain `extract` and then runs `--split-variants` is silently no-op'd on already-marked pages (idempotency check matches sibling markers). If real consumers hit this, add an explicit migration sub-pass that rewrites `<!-- fragment:nav -->` → `<!-- fragment:nav-N -->` based on which variant content sits between the markers. **Trigger:** first time a consumer asks for it.
-- **Cleanup (low priority)** — `ExtractCandidate.tag` field is no longer consumed by `extract.rs`; kept in the schema for one cycle for backward compat. Either drop it (breaking config) or move to `Option<String>` with deprecation note.
 
 ## Blocked
 

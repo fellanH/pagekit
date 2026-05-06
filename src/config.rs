@@ -48,15 +48,15 @@ pub struct TransformsConfig {
     pub attrs: Vec<String>,
 }
 
+/// User-defined extract candidate. `tag = "..."` was required in the
+/// pre-lol_html implementation; serde silently ignores it now if present
+/// in legacy configs.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ExtractCandidate {
     /// Fragment file basename produced by extract (`<name>.html`).
     pub name: String,
     /// CSS selector used to locate the element in the parsed DOM.
     pub selector: String,
-    /// HTML tag name of the element. Used to walk the raw source when
-    /// inserting marker pairs.
-    pub tag: String,
 }
 
 impl Config {

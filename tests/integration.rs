@@ -334,7 +334,10 @@ fn extract_idempotent_does_not_double_wrap() {
 }
 
 #[test]
-fn extract_picks_up_user_defined_candidate() {
+fn extract_legacy_tag_field_silently_ignored() {
+    // The `tag = "..."` field was required pre-lol_html; serde drops it
+    // silently for legacy configs that still declare it. Fragment still
+    // ships, marker still wraps. No error, no warning, just works.
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
 
@@ -344,6 +347,40 @@ fn extract_picks_up_user_defined_candidate() {
 name = "sidebar"
 selector = "aside.sidebar"
 tag = "aside"
+"#,
+    )
+    .unwrap();
+
+    let sidebar = "<aside class=\"sidebar\"><h3>Links</h3></aside>";
+    let page = |unique: &str| {
+        format!("<!DOCTYPE html><html><body>{sidebar}<main>{unique}</main></body></html>")
+    };
+
+    fs::write(root.join("a.html"), page("A")).unwrap();
+    fs::write(root.join("b.html"), page("B")).unwrap();
+
+    let output = run_extract(root);
+    assert!(
+        output.status.success(),
+        "legacy tag field must not break extract: {:?}",
+        output
+    );
+    assert!(
+        root.join("_fragments/sidebar.html").exists(),
+        "fragment should still ship despite legacy tag field"
+    );
+}
+
+#[test]
+fn extract_picks_up_user_defined_candidate() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("fragments.toml"),
+        r#"[[extract.candidates]]
+name = "sidebar"
+selector = "aside.sidebar"
 "#,
     )
     .unwrap();
@@ -382,7 +419,6 @@ fn extract_user_candidate_appends_to_builtins() {
         r#"[[extract.candidates]]
 name = "sidebar"
 selector = "aside.sidebar"
-tag = "aside"
 "#,
     )
     .unwrap();

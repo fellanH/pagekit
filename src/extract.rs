@@ -204,9 +204,6 @@ pub fn extract_fragments(root: &Path, config: &Config, split_variants: bool) -> 
 
     // Candidate selectors: built-ins + any user-provided. User entries
     // append to defaults — adding one custom doesn't lose the built-ins.
-    // The `tag` field on user candidates is accepted for backward compat
-    // but no longer consumed: lol_html resolves the source span from the
-    // selector alone.
     let mut candidates: Vec<(String, String)> = vec![
         ("nav".into(), "nav".into()),
         ("footer".into(), "footer".into()),
