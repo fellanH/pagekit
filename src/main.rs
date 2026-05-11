@@ -1,5 +1,8 @@
 mod a11y;
+mod apply_rules;
 mod assets;
+mod mv_asset;
+mod rename_assets;
 mod check_strict;
 mod config;
 mod css_refs;
@@ -130,6 +133,37 @@ enum Cmd {
     /// final summary table reports per-check pass/fail. Exit 0 if all
     /// pass, exit 2 if any fail.
     Preflight,
+    /// Apply a parameterized rule file to update many pages at once.
+    /// Safe-by-default: runs as a dry-run unless --write is passed.
+    Apply {
+        /// Path to a TOML rule file.
+        rules: PathBuf,
+        /// Set parameter values (repeatable): --set key=value
+        #[arg(long, value_name = "KEY=VALUE")]
+        set: Vec<String>,
+        /// Actually write changes to disk (default is dry-run).
+        #[arg(long)]
+        write: bool,
+    },
+    /// Rename/move an asset and update all references (HTML src/href/srcset, CSS url()).
+    /// Safe-by-default: runs as a dry-run unless --write is passed.
+    MvAsset {
+        /// Existing asset path (relative to target_dir if it exists, else repo root).
+        from: PathBuf,
+        /// New asset path (relative to target_dir if it exists, else repo root).
+        to: PathBuf,
+        /// Actually write changes and move the file (default is dry-run).
+        #[arg(long)]
+        write: bool,
+    },
+    /// Batch-rename assets to safe names and rewrite all references.
+    /// Currently supports a single policy: spaces-to-hyphens.
+    /// Safe-by-default: runs as a dry-run unless --write is passed.
+    RenameAssets {
+        /// Actually write changes and rename files (default is dry-run).
+        #[arg(long)]
+        write: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -258,6 +292,25 @@ fn main() -> Result<()> {
             let code = preflight::run_preflight(&root, &config)?;
             if code != 0 {
                 std::process::exit(code);
+            }
+        }
+        Cmd::Apply { rules, set, write } => {
+            let modified = apply_rules::run_apply(&root, &config, &rules, &set, write)?;
+            if !write && modified > 0 {
+                // Dry-run with pending changes: exit 2 so callers can gate.
+                std::process::exit(2);
+            }
+        }
+        Cmd::MvAsset { from, to, write } => {
+            let modified = mv_asset::run_mv_asset(&root, &config, &from, &to, write)?;
+            if !write && modified > 0 {
+                std::process::exit(2);
+            }
+        }
+        Cmd::RenameAssets { write } => {
+            let modified = rename_assets::run_rename_assets(&root, &config, write)?;
+            if !write && modified > 0 {
+                std::process::exit(2);
             }
         }
     }
