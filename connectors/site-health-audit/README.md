@@ -10,8 +10,9 @@ python3 connectors/site-health-audit/audit.py <site-dir> --out report.html [--op
 - Renders one self-contained HTML file (CSS inlined → email/upload-able as-is).
 - Styling comes from the omni `packages/ui` design tokens (`tokens.css` + `theme.css`),
   read at render time so the report stays in lockstep with the design system.
-- Exit code mirrors the suite: `0` = all checks pass, `2` = a check failed (≥1 error).
-  Warnings are advisory and do not flip the exit code (same as `pagekit seo`/`a11y`).
+- Exit code mirrors the suite standard: `0` = all checks pass, `1` = a check failed
+  (≥1 error), `2` = tool-internal error (bad dir, pagekit emitted no JSON). Warnings are
+  advisory and do not flip the exit code (same as `pagekit seo`/`a11y`).
 
 ## Why it lives outside the binary
 

@@ -3,7 +3,11 @@
 //! Every check that emits human-prose findings (`links`, `seo`, `a11y`)
 //! also speaks `--json`: the same findings as a structured envelope an
 //! agent can deserialize instead of regexing stdout. Exit codes are
-//! unchanged by `--json` — `0` clean, `2` findings.
+//! unchanged by `--json` — `0` clean, `1` findings (`2` = tool error).
+//!
+//! Schema matches the suite standard set by the published `fragments-sync`
+//! core: a boolean `ok` (not a `status` string) that mirrors the exit code
+//! (`ok: true` ⟺ exit `0`).
 
 use serde::Serialize;
 
@@ -28,8 +32,10 @@ pub struct JsonFinding {
 pub struct Report {
     /// Check name (`"links"`, `"seo"`, `"a11y"`).
     pub check: &'static str,
-    /// `"pass"` or `"fail"` — mirrors the process exit code (`0`/`2`).
-    pub status: &'static str,
+    /// `true` = clean, `false` = findings. Mirrors the process exit code
+    /// (`ok: true` ⟺ exit `0`; `ok: false` ⟺ exit `1`). Field name and
+    /// semantics match the published `fragments-sync` suite standard.
+    pub ok: bool,
     pub findings: Vec<JsonFinding>,
 }
 

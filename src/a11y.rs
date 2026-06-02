@@ -66,14 +66,14 @@ pub fn run_a11y(root: &Path, config: &Config, json: bool) -> Result<i32> {
                 message: f.message.clone(),
             })
             .collect();
-        let status = if jf.is_empty() { "pass" } else { "fail" };
+        let ok = jf.is_empty();
         Report {
             check: "a11y",
-            status,
+            ok,
             findings: jf,
         }
         .print()?;
-        return Ok(if status == "pass" { 0 } else { 2 });
+        return Ok(if ok { 0 } else { 1 });
     }
 
     if findings.is_empty() {
@@ -106,7 +106,7 @@ Color contrast, focus-visible styles, dynamic ARIA semantics, and \
 SVG-icon accessible-name resolution need rendering and are NOT checked.)"
     );
 
-    Ok(2)
+    Ok(1)
 }
 
 #[derive(Debug)]

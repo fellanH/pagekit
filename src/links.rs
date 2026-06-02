@@ -272,14 +272,14 @@ pub fn run_links(root: &Path, config: &Config, json: bool) -> Result<i32> {
                 message: format!("{} (no references)", rel.display()),
             });
         }
-        let status = if findings.is_empty() { "pass" } else { "fail" };
+        let ok = findings.is_empty();
         Report {
             check: "links",
-            status,
+            ok,
             findings,
         }
         .print()?;
-        return Ok(if status == "pass" { 0 } else { 2 });
+        return Ok(if ok { 0 } else { 1 });
     }
 
     // Render report.
@@ -319,7 +319,7 @@ pub fn run_links(root: &Path, config: &Config, json: bool) -> Result<i32> {
         return Ok(0);
     }
 
-    Ok(2)
+    Ok(1)
 }
 
 /// Single href or src reference captured from a page.

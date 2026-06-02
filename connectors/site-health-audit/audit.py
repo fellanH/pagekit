@@ -55,10 +55,13 @@ def run_check(pagekit: str, site: Path, check: str) -> dict:
     try:
         return json.loads(proc.stdout)
     except json.JSONDecodeError:
-        sys.exit(
+        # Tool-internal error (distinct from findings) → exit 2, matching the suite.
+        print(
             f"pagekit {check} produced no JSON (exit {proc.returncode}):\n"
-            f"{proc.stderr.strip() or proc.stdout.strip()}"
+            f"{proc.stderr.strip() or proc.stdout.strip()}",
+            file=sys.stderr,
         )
+        sys.exit(2)
 
 
 def collect(pagekit: str, site: Path) -> list[dict]:
@@ -276,7 +279,8 @@ def main() -> int:
 
     site = args.site.expanduser().resolve()
     if not site.is_dir():
-        sys.exit(f"not a directory: {site}")
+        print(f"not a directory: {site}", file=sys.stderr)
+        sys.exit(2)
     title = args.title or site.name
 
     reports = collect(args.pagekit, site)
@@ -290,8 +294,9 @@ def main() -> int:
 
     if args.open:
         subprocess.run(["open", str(out_path)], check=False)
-    # Mirror the verify suite: errors fail (exit 2), warnings are advisory (pass).
-    return 2 if total_errors else 0
+    # Mirror the suite standard: errors fail (exit 1), warnings are advisory (pass).
+    # Tool-internal errors use the distinct code 2 (see run_check / not-a-dir guard).
+    return 1 if total_errors else 0
 
 
 if __name__ == "__main__":

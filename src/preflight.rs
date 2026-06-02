@@ -101,7 +101,7 @@ pub fn run_preflight(root: &Path, config: &Config) -> Result<i32> {
             "preflight: {} of {total} check(s) failing",
             had_failures + had_errors
         );
-        Ok(2)
+        Ok(1)
     }
 }
 

@@ -207,7 +207,7 @@ pub fn run_check_strict(root: &Path, config: &Config, name_filter: Option<&str>)
         }
     }
 
-    Ok(2)
+    Ok(1)
 }
 
 /// Run `pagekit check --strict --selector "..."`. Generalizes the
@@ -316,7 +316,7 @@ pub fn run_check_strict_selector(root: &Path, config: &Config, selector_str: &st
         );
     }
 
-    Ok(2)
+    Ok(1)
 }
 
 #[cfg(test)]

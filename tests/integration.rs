@@ -580,8 +580,8 @@ fn check_strict_detects_variance() {
     let output = run_check_strict(root, &[]);
     assert_eq!(
         output.status.code(),
-        Some(2),
-        "expected exit 2 on variance, got {:?}\nstdout: {}\nstderr: {}",
+        Some(1),
+        "expected exit 1 on variance, got {:?}\nstdout: {}\nstderr: {}",
         output.status,
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
@@ -621,11 +621,11 @@ fn check_strict_with_name_filter() {
     fs::write(root.join("b.html"), page(footer_b, "B")).unwrap();
     fs::write(root.join("c.html"), page(footer_b, "C")).unwrap();
 
-    // Without filter: footer variance trips exit 2.
+    // Without filter: footer variance trips exit 1.
     let unfiltered = run_check_strict(root, &[]);
     assert_eq!(
         unfiltered.status.code(),
-        Some(2),
+        Some(1),
         "unfiltered run should detect footer variance"
     );
 
@@ -1197,11 +1197,11 @@ fn normalize_paths_dry_run_does_not_write() {
     fs::write(root.join("foo/index.html"), html).unwrap();
 
     let output = run_normalize_paths_dry(root);
-    // Pending changes in dry-run gate at exit 2 (matches apply/mv-asset).
+    // Pending changes in dry-run gate at exit 1 (matches apply/mv-asset).
     assert_eq!(
         output.status.code(),
-        Some(2),
-        "dry-run with pending changes must exit 2"
+        Some(1),
+        "dry-run with pending changes must exit 1"
     );
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
@@ -1252,8 +1252,8 @@ fn links_detects_broken_internal() {
     let output = run_links(root);
     assert_eq!(
         output.status.code(),
-        Some(2),
-        "broken internal link should exit 2"
+        Some(1),
+        "broken internal link should exit 1"
     );
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
@@ -1307,7 +1307,7 @@ fn links_detects_orphan_asset() {
     fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
 
     let output = run_links(root);
-    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
         stdout.contains("_assets/unused.svg"),
@@ -1551,7 +1551,7 @@ fn seo_flags_missing_title() {
     .unwrap();
 
     let output = run_seo(root);
-    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
         stdout.contains("missing <title>"),
@@ -1584,7 +1584,7 @@ fn seo_flags_canonical_origin_mismatch() {
     .unwrap();
 
     let output = run_seo(root);
-    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
         stdout.contains("scheme/host mismatch"),
@@ -1618,7 +1618,7 @@ fn seo_flags_invalid_json_ld() {
     .unwrap();
 
     let output = run_seo(root);
-    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
         stdout.contains("invalid JSON"),
@@ -1651,7 +1651,7 @@ fn seo_warns_short_title_does_not_error() {
     .unwrap();
 
     let output = run_seo(root);
-    // Warns alone should NOT exit 2.
+    // Warns alone should NOT exit 1.
     assert!(
         output.status.success(),
         "warn-only output must exit 0:\nstdout: {}",
@@ -1718,7 +1718,7 @@ fn a11y_flags_missing_alt() {
     .unwrap();
 
     let output = run_a11y(root);
-    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
         stdout.contains("img-alt"),
@@ -1746,7 +1746,7 @@ fn a11y_flags_unlabeled_input() {
     .unwrap();
 
     let output = run_a11y(root);
-    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
         stdout.contains("form-label"),
@@ -1771,7 +1771,7 @@ fn a11y_flags_missing_html_lang() {
     .unwrap();
 
     let output = run_a11y(root);
-    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
         stdout.contains("html-lang"),
@@ -1805,7 +1805,7 @@ fn a11y_flags_generic_link_text() {
     .unwrap();
 
     let output = run_a11y(root);
-    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(stdout.contains("link-text"));
     assert!(stdout.contains("\"click here\""));
@@ -1893,8 +1893,8 @@ fn check_strict_selector_detects_variance() {
     let output = run_check_strict(root, &["--selector", "footer"]);
     assert_eq!(
         output.status.code(),
-        Some(2),
-        "two variants must exit 2:\nstdout: {}",
+        Some(1),
+        "two variants must exit 1:\nstdout: {}",
         String::from_utf8_lossy(&output.stdout)
     );
     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -2200,8 +2200,8 @@ fn preflight_aggregates_failures() {
     let output = run_preflight(root);
     assert_eq!(
         output.status.code(),
-        Some(2),
-        "site with failing checks must exit 2"
+        Some(1),
+        "site with failing checks must exit 1"
     );
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(stdout.contains("pagekit preflight:"));
@@ -2231,7 +2231,7 @@ fn preflight_lists_stale_pages_under_check() {
     );
 
     let output = run_preflight(root);
-    assert_eq!(output.status.code(), Some(2), "stale site must exit 2");
+    assert_eq!(output.status.code(), Some(1), "stale site must exit 1");
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
         stdout.contains("stale-page.html"),
@@ -2258,7 +2258,7 @@ fn links_json_clean_site_reports_pass() {
     let v: serde_json::Value = serde_json::from_slice(&output.stdout)
         .expect("links --json must emit valid JSON on stdout");
     assert_eq!(v["check"], "links");
-    assert_eq!(v["status"], "pass");
+    assert_eq!(v["ok"], true);
     assert_eq!(v["findings"].as_array().unwrap().len(), 0);
 }
 
@@ -2274,10 +2274,10 @@ fn links_json_reports_broken_internal() {
     .unwrap();
 
     let output = run_check_json(root, "links");
-    assert_eq!(output.status.code(), Some(2), "findings must exit 2");
+    assert_eq!(output.status.code(), Some(1), "findings must exit 1");
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(v["check"], "links");
-    assert_eq!(v["status"], "fail");
+    assert_eq!(v["ok"], false);
     let findings = v["findings"].as_array().unwrap();
     assert!(
         findings
@@ -2303,10 +2303,10 @@ fn seo_json_reports_error_finding() {
     .unwrap();
 
     let output = run_check_json(root, "seo");
-    assert_eq!(output.status.code(), Some(2), "errors must exit 2");
+    assert_eq!(output.status.code(), Some(1), "errors must exit 1");
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(v["check"], "seo");
-    assert_eq!(v["status"], "fail");
+    assert_eq!(v["ok"], false);
     assert!(
         v["findings"]
             .as_array()
@@ -2329,10 +2329,10 @@ fn a11y_json_reports_violation() {
     .unwrap();
 
     let output = run_check_json(root, "a11y");
-    assert_eq!(output.status.code(), Some(2), "violations must exit 2");
+    assert_eq!(output.status.code(), Some(1), "violations must exit 1");
     let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(v["check"], "a11y");
-    assert_eq!(v["status"], "fail");
+    assert_eq!(v["ok"], false);
     assert!(
         v["findings"]
             .as_array()

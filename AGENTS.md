@@ -59,9 +59,9 @@ Full shipped surface (ground truth: `pagekit --help`):
 - **Read** (token-efficient): `inventory`, `show`, `assets`.
 - **Verify:** `check` (+ `--strict`, `--strict --selector`), `doctor`, `links` (+ `--json`), `seo` (+ `--json`), `a11y` (+ `--json`), `preflight` (single go-live gate).
 
-**Exit-code convention** (predictable substrate for agent gating): `0` = clean/pass, `2` = findings (broken links, SEO/a11y violations, stale/malformed markers, pending dry-run changes), runtime errors bubble up nonzero. Every verify command and every safe-by-default mutator follows this — `2` uniformly means "there is something to act on."
+**Exit-code convention** (suite standard, anchored by published `fragments-sync`): `0` = clean/pass, `1` = findings (broken links, SEO/a11y violations, stale/malformed markers, pending dry-run changes), `2` = tool-internal error (bad args, unreadable root). Every verify command and every safe-by-default mutator follows this — `1` uniformly means "the check found problems", and the distinct `2` means "the tool itself failed" so agents gating on `exit == 1` never confuse the two.
 
-**`--json`** (`links`, `seo`, `a11y`): emits `{check, status, findings:[{rule, severity, page?, message}]}` instead of prose. Exit code is unchanged. Deserialize instead of regexing stdout.
+**`--json`** (`links`, `seo`, `a11y`): emits `{check, ok, findings:[{rule, severity, page?, message}]}` instead of prose, where `ok` is a boolean mirroring the exit code (`ok: true` ⟺ exit `0`). Field name and semantics match the `fragments-sync` suite standard. Exit code is unchanged by `--json`. Deserialize instead of regexing stdout.
 
 Still gated (no trigger fired): framework-export profiles for Webflow/Bootstrap-class layouts; Phase 4 candidates in `tasks/arc.md` backlog.
 

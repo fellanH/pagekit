@@ -60,16 +60,16 @@ Findings from running pagekit's checks against ettsmart.se on 2026-05-06. Surfac
 - **`pagekit seo`** — 3 missing canonicals (`/thank-you/`, `/sv/thank-you/`, `/test/`); 11 missing meta descriptions on SV subpages; 8 multiple-H1 warnings on Webflow templates; 25 missing OG-tag warnings; 1 duplicate-description; canonical www→apex mismatch (declared canonicals all use `www.ettsmart.se` but live deploy serves apex — needs `expected_origin` config to auto-flag, see backlog)
 - **`pagekit a11y`** — 4 unlabeled honeypot anti-spam fields (`<input name="website">` without proper hiding) on contact forms
 
-## Pending coordinator decision (do NOT action either side)
+## Resolved decisions
 
-- **Suite-wide `--json`/exit-code standard (relay 2026-06-02, FYI-only).** pagekit emits
-  `{status: "pass"|"fail"}` + exit `2`; the published core `fragments-sync` v0.8.0 emits
-  `{ok: bool}` + exit `1`, documented with a stable-schema promise. Coordinator flagged for a
-  suite-standard decision. The non-breaking direction is **pagekit→fragments** (adopt `ok`/exit-1)
-  since fragments is published+stable and pagekit is v0.1.0 unpublished — but it is the **coordinator's
-  call**, not yet decided. Do NOT change pagekit's envelope or exit codes until the standard lands.
-  (Note: the `site-health-audit` connector keys off `severity`, not `status`, so it is unaffected
-  either way; only the exit-code semantics would shift.)
+- **Suite-wide `--json`/exit-code standard — DONE (tas-0b56c632, coordinator-approved).** pagekit
+  now matches the published `fragments-sync` suite standard: `--json` envelope is `{check, ok, findings}`
+  (boolean `ok = clean`, not `status:pass/fail`), and exit codes are `0` clean / `1` findings (was `2`).
+  A **distinct `2` is reserved for tool-internal errors** (bad args/unreadable root) via a `main`→`run`
+  wrapper, per the backlog's "keep a distinct code if you have one" — so `exit == 1` unambiguously means
+  "the check found problems" suite-wide. The `site-health-audit` connector was already severity-keyed
+  (unaffected by the envelope change); its own emitted exit codes were aligned to 1/0/2 to match.
+  49 unit + 70 integ green, clippy + fmt clean, binary reshipped to both PATH locations.
 
 ## Blocked
 

@@ -73,11 +73,11 @@ pub fn run_seo(root: &Path, config: &Config, json: bool) -> Result<i32> {
             .collect();
         Report {
             check: "seo",
-            status: if had_errors { "fail" } else { "pass" },
+            ok: !had_errors,
             findings: jf,
         }
         .print()?;
-        return Ok(if had_errors { 2 } else { 0 });
+        return Ok(if had_errors { 1 } else { 0 });
     }
 
     if findings.is_empty() {
@@ -125,7 +125,7 @@ pub fn run_seo(root: &Path, config: &Config, json: bool) -> Result<i32> {
     }
 
     if had_errors {
-        Ok(2)
+        Ok(1)
     } else {
         Ok(0)
     }

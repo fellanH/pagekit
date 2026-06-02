@@ -11,7 +11,22 @@ Feature-complete, **no active sprint, no open blockers**. Build green, binary sh
 > (cargo bin precedes `~/.local/bin`). Ship to **both** after a build, or `which pagekit` runs stale.
 > This session shipped to both.
 
-## Latest session — GREEN slice landed: Site Health Audit report (2026-06-02)
+## Latest session — suite exit-code/JSON standard adopted (2026-06-03, tas-0b56c632)
+
+Coordinator-approved alignment to the published `fragments-sync` suite standard. **Breaking
+contract change** (pagekit is v0.1.0 unpublished, so it's the cheap side to move):
+- `--json` envelope `{check, status:"pass"|"fail", findings}` → **`{check, ok:bool, findings}`**
+  (`ok = clean`, mirrors exit code). Applies to `links`/`seo`/`a11y`.
+- Exit codes: findings now **`1`** (was `2`); `0` still clean. **`2` is now reserved for
+  tool-internal errors** (bad args/unreadable root) via a `main`→`run` wrapper — so `exit == 1`
+  means "check found problems" suite-wide, distinct from "the tool failed".
+- Internal consumer aligned: `site-health-audit` connector emits 1/0/2 (was severity-keyed for
+  the envelope, so unaffected there). Docs updated (AGENTS.md exit-code + `--json` sections).
+- 49 unit + 70 integ green (all `Some(2)`→`Some(1)`, `status`→`ok` assertions updated), clippy +
+  fmt clean, binary reshipped to `~/.local/bin` **and** the cargo-bin PATH shadow.
+- Any future consumer that regexed `"status": "pass"` or gated on `exit == 2`-for-findings must update.
+
+## Earlier session — GREEN slice landed: Site Health Audit report (2026-06-02)
 
 The coordinator-approved QUEUED slice (`verify → --json → branded HTML report`) is **done,
 runnable, dogfooded**. Built as a **presentation connector OUTSIDE the binary** —
@@ -43,12 +58,14 @@ The two dogfood fix-candidates from the knowledge-base audit are **done, shipped
   `stormfors/knowledge-base`: build scripts gone from orphans; preflight names all stale pages.
 - **CAND-C still deferred** (low-confidence `_`-prefix SEO skip) — wait for a consumer complaint.
 
-Latest sprint — agent-consumable substrate (`2bab3de` + `1b67de8`):
-- **#1 `--json`** on `links`/`seo`/`a11y` — envelope `{check,status,findings:[{rule,severity,page?,message}]}`
-  via `src/report.rs`. Agents deserialize instead of regexing. Exit code unchanged. (inventory/assets
+Latest sprint — agent-consumable substrate (`2bab3de` + `1b67de8`). **NOTE: the envelope/exit-code
+specifics below were superseded 2026-06-03 — see top section. Now `{check,ok,findings}`, findings exit `1`,
+tool-error exit `2`.**
+- **#1 `--json`** on `links`/`seo`/`a11y` — envelope (then `{check,status,findings}`, now `{check,ok,findings}`)
+  via `src/report.rs`. Agents deserialize instead of regexing. (inventory/assets
   already emit TSV; `doctor`/`check` route through the fragments lib → deferred, would need upstream work.)
-- **#2 uniform exit codes** — `check`/`doctor` now exit `2` on findings, matching the rest. `2` = "something to act on."
-- **#3 `normalize-paths` safe-by-default** — dry-run unless `--write`, exit `2` on pending changes.
+- **#2 uniform exit codes** — `check`/`doctor` exit nonzero on findings, matching the rest (then `2`, now `1`).
+- **#3 `normalize-paths` safe-by-default** — dry-run unless `--write`, nonzero exit on pending changes (now `1`).
 - Held the polish (`--skip`/`--only`/`--policy`/`-q`/`--diff`) per subtract-before-building.
 - Tests: 64 integ + 48 unit, clippy + fmt clean.
 

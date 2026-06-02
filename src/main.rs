@@ -21,6 +21,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use config::Config;
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 #[derive(Parser)]
 #[command(
@@ -183,7 +184,21 @@ enum Cmd {
     },
 }
 
-fn main() -> Result<()> {
+/// Exit codes follow the suite standard (anchored by published `fragments-sync`):
+/// `0` = clean, `1` = the check found problems. A distinct `2` is reserved for
+/// tool-internal errors (bad args, unreadable root) so an agent gating on
+/// `exit == 1` never confuses "findings" with "the tool itself failed".
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("pagekit: {e:#}");
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn run() -> Result<()> {
     let cli = Cli::parse();
     let root = std::fs::canonicalize(&cli.root)
         .with_context(|| format!("cannot resolve root: {}", cli.root.display()))?;
@@ -247,7 +262,7 @@ fn main() -> Result<()> {
                         ),
                     }
                 }
-                std::process::exit(2);
+                std::process::exit(1);
             }
         }
         Cmd::Init { file } => {
@@ -269,7 +284,7 @@ fn main() -> Result<()> {
         Cmd::Doctor => {
             let issues = fragments::doctor::run_doctor(&root, &config.core)?;
             if issues > 0 {
-                std::process::exit(2);
+                std::process::exit(1);
             }
         }
         Cmd::Inventory { save } => {
@@ -279,7 +294,7 @@ fn main() -> Result<()> {
             let modified = normalize::normalize_paths(&root, &config, write)?;
             if !write && modified > 0 {
                 // Dry-run with pending changes: exit 2 so callers can gate.
-                std::process::exit(2);
+                std::process::exit(1);
             }
         }
         Cmd::Links { json } => {
@@ -319,19 +334,19 @@ fn main() -> Result<()> {
             let modified = apply_rules::run_apply(&root, &config, &rules, &set, write)?;
             if !write && modified > 0 {
                 // Dry-run with pending changes: exit 2 so callers can gate.
-                std::process::exit(2);
+                std::process::exit(1);
             }
         }
         Cmd::MvAsset { from, to, write } => {
             let modified = mv_asset::run_mv_asset(&root, &config, &from, &to, write)?;
             if !write && modified > 0 {
-                std::process::exit(2);
+                std::process::exit(1);
             }
         }
         Cmd::RenameAssets { write } => {
             let modified = rename_assets::run_rename_assets(&root, &config, write)?;
             if !write && modified > 0 {
-                std::process::exit(2);
+                std::process::exit(1);
             }
         }
     }
