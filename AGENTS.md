@@ -9,7 +9,7 @@ Worker-tier per `harness/rules/omni/tier-architecture.md`.
 ## Boot
 
 ```bash
-cd ~/omni/workspaces/pagekit
+cd ~/omni/products/pagekit
 cargo build --release
 cp target/release/pagekit ~/.local/bin/pagekit
 ```
