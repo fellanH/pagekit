@@ -69,6 +69,25 @@ Full original detail + root cause: `todo/2026-06-02-dogfood-knowledge-base.md`.
 **Site bugs are NOT pagekit's** — the KB has 27 stale pages needing `pagekit sync` (real content drift
 the tool caught correctly). Owner: the knowledge-base seat, relay via hub, do not absorb.
 
+## Relay-inbox drain (2026-06-02 ~22:40)
+
+Drained 5 undrained items in `~/.omni/relay-inbox/pagekit/` (marked `.done`):
+- **Suite framing + seam** (08:40 ×2) — ack: 5 seats = ONE website-mgmt product suite, revenue-biased;
+  pagekit composes fragments core, flag needs upstream / coordinate before breaking. Live upstream flag
+  stands: JSON-on-`check`/`doctor` needs fragments to expose structured returns from `run_doctor`/check.
+- **Migration-friction relay** (10:52) — vault `01KT3Z6X38ZZBKJ9SPP5M5H6M2`: asset-parity + visual-diff
+  gaps in clone tooling. **Triaged by first-principles (below):** these are *migration-connector*
+  opinions, NOT pagekit verify commands. pagekit already ships the mechanism (`assets` hash+bytes); the
+  parity gate composes it. Decision recorded in `tasks/arc.md`. No pagekit feature added.
+- **Fleet-pitch experiment** (10:52, bounded → 2026-06-16) — filed `~/.omni/idea-queue/pitch-pagekit-1.md`:
+  package the verify suite as a billable client "Site Health Audit" (evidence: real defects found
+  dogfooding 2 client sites this session). Relay-only, action gate unchanged.
+- **Felix first-principles directive** (20:35) — minimal unopinionated core + connectors. Reasoned the
+  domain; conclusion: macro-architecture already correct (fragments=mechanism core, pagekit=HTML-opinion
+  connector). Two trigger-gated refinements recorded in `tasks/arc.md` Decisions: (a) externalize
+  hardcoded HTML policy to a `[policy]` config block on the *next* whitelist edit (not now); (b) keep
+  migration-verification opinions out of pagekit (cross-connector boundary).
+
 ## Then
 
 CAND-A + CAND-B done. `tasks/arc.md` backlog is now all trigger-gated — **don't pull gated items
