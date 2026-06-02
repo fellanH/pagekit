@@ -52,10 +52,14 @@ This workspace does NOT:
 
 ## Skills in scope
 
-- `init` and `extract` (shipped). `extract` source-rewrite runs on `lol_html` for byte-preserving wrap; cross-page detection still uses `scraper`.
-- HTML-aware `doctor` extensions (next consumer-driven feature).
-- Framework-export profiles for common Webflow/Bootstrap-class layouts (Stage 3+).
-- `pagekit check --strict` — pre-flight diff of marker regions across pages by name; warns when content under the same marker name varies. Safety gate for sync. See `tasks/arc.md` backlog.
+Full shipped surface (ground truth: `pagekit --help`):
+
+- **Build/edit:** `init`, `extract` (+ `--split-variants`), `sync`, `watch`, `normalize-paths`, `file-paths`, `list`, `config`. `extract` source-rewrite runs on `lol_html` for byte-preserving wrap; cross-page detection uses `scraper`.
+- **Bulk edit** (safe-by-default — dry-run unless `--write`): `apply` (parameterized rule file), `mv-asset`, `rename-assets`.
+- **Read** (token-efficient): `inventory`, `show`, `assets`.
+- **Verify:** `check` (+ `--strict`, `--strict --selector`), `doctor`, `links`, `seo`, `a11y`, `preflight` (single go-live gate).
+
+Still gated (no trigger fired): framework-export profiles for Webflow/Bootstrap-class layouts; Phase 4 candidates in `tasks/arc.md` backlog.
 
 ## Tools in scope
 

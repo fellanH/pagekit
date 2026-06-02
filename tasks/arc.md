@@ -8,7 +8,8 @@ Binary ships. Sprints 4-7 closed; agent-tooling trajectory complete. Test suite 
 
 **Pagekit is feature-complete for the Phase 1-3 plan from the strategic exchange.** Full surface:
 
-- **Build/edit:** `init`, `extract`, `extract --split-variants`, `sync`, `watch`, `normalize-paths`, `list`, `config`
+- **Build/edit:** `init`, `extract`, `extract --split-variants`, `sync`, `watch`, `normalize-paths`, `file-paths`, `list`, `config`
+- **Bulk edit (safe-by-default, dry-run unless `--write`):** `apply`, `mv-asset`, `rename-assets` (commit `cc12ec8`, agent-edits trajectory)
 - **Read (token-efficient):** `inventory`, `show`, `assets`
 - **Verify:** `check`, `check --strict`, `check --strict --selector`, `doctor`, `links`, `seo`, `a11y`, `preflight`
 
