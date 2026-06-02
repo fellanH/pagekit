@@ -39,6 +39,14 @@ Phase 4 candidates (image dims, semantic variant naming, framework profiles, exp
 - **Migration ergonomics for `--split-variants`** — fresh-run only today; a re-run after plain `extract` is silently no-op'd. **Trigger:** first time a consumer asks for it.
 - **Broken-link check on `<meta>` social-card images** — `links`/`assets` now COUNT `og:image`/`twitter:image` content toward the reference graph (orphan-set only; commit `cd9b898`), but a meta image pointing at a *missing* file is not yet flagged broken. Absolute OG URLs are the spec norm (skipped as External), so only relative/root-absolute would be checked. **Trigger:** a consumer ships a broken social card via a relative og:image and wants it caught. See `todo/2026-06-02-dogfood-weknowaeo.md` (BUG-3).
 
+### Dogfood fix-candidates from knowledge-base audit (2026-06-02) — READY, cheap, not yet implemented
+
+Surfaced running the audit against `stormfors/knowledge-base`. Full detail + root cause in
+[`todo/2026-06-02-dogfood-knowledge-base.md`](../todo/2026-06-02-dogfood-knowledge-base.md). Next seat: implement A + B (both cheap, both my scope).
+- **CAND-A — `preflight` swallows `check`'s stale-file list.** `run_sync_check` (`src/preflight.rs:130-136`) keeps only `issues.len()`; the `== check ==` section is blank on failure while standalone `check` lists every stale page. Print each `issues` entry under the section + integ test. ~5 lines.
+- **CAND-B — orphan-asset detection flags non-web build scripts** (`.sh`/`.py`) when `target_dir="."`. Skip non-web-deployable extensions in `links.rs` + `assets.rs` orphan checks (shared list). + test.
+- **CAND-C (low-confidence, defer)** — `_`-prefixed scaffolding templates SEO-audited as real pages. Blanket `_`-skip risks over-reach; wait for a consumer complaint.
+
 ## Real bugs surfaced (not pagekit's responsibility)
 
 Findings from running pagekit's checks against ettsmart.se on 2026-05-06. Surfaced naturally; owner: chad-ettsmart_se.

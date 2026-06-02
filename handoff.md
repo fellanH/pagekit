@@ -43,10 +43,25 @@ twitter:image content>` now counts toward the reference graph (was a false orpha
 Real site findings (broken privacy/terms Next export → 404 titles, missing canonicals, etc.) are **weknowaeo's**,
 not pagekit's — captured in `todo/2026-06-02-dogfood-weknowaeo.md` for relay.
 
+## Dogfood #2 — knowledge-base audit (2026-06-02, audit-only, fixes deferred to you)
+
+Ran the read-only audit against `~/omni/companies/stormfors/knowledge-base` (31-page hand-authored KB;
+different shape from the we-know-aeo Next export). No crashes. Surfaced **2 cheap tool fix-candidates,
+NOT yet implemented** (Felix scoped this run to audit+report+rotate, not fix):
+- **CAND-A:** `preflight` discards `check`'s stale-file list (`src/preflight.rs:130-136` keeps only the
+  count) — `== check ==` blank on failure while standalone `check` lists all stale pages. ~5-line fix + test.
+- **CAND-B:** orphan-asset detection flags non-web build scripts (`.sh`/`.py`) when `target_dir="."`.
+  Skip non-web extensions in `links.rs`+`assets.rs`. + test.
+- CAND-C (defer, low-confidence): `_`-prefixed templates SEO-audited as pages.
+
+Full detail + root cause: `todo/2026-06-02-dogfood-knowledge-base.md`; also in `tasks/arc.md` backlog.
+**Next seat: implement CAND-A + CAND-B** (both cheap, both pagekit's scope). Site bugs (27 stale KB pages
+needing `pagekit sync`, etc.) are the knowledge-base seat's — relayed via hub, do not absorb.
+
 ## Then
 
-Nothing dispatched. `tasks/arc.md` backlog is trigger-gated (no trigger fired). Don't pull gated items
-speculatively. If idle, do baton/doc hygiene or wait for a consumer-driven trigger.
+Pick up CAND-A + CAND-B above (ready, cheap). Otherwise `tasks/arc.md` backlog stays trigger-gated —
+don't pull gated items speculatively. If idle, do baton/doc hygiene or wait for a consumer-driven trigger.
 
 ## Recent commits this session
 
