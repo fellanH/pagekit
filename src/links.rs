@@ -79,6 +79,25 @@ pub fn run_links(root: &Path, config: &Config, json: bool) -> Result<i32> {
                 }
             }
         }
+        // Social-card images live in `<meta og:image / twitter:image
+        // content="…">`, not href/src. They DO reference real asset
+        // files (preview cards must point at something that exists).
+        // Orphan-set only, like srcset: a missing card degrades
+        // gracefully and absolute OG URLs are the spec norm, so we
+        // don't feed these into the broken-link check (see todo).
+        for el in doc.select(&Selector::parse("meta[content]").unwrap()) {
+            let key = el
+                .value()
+                .attr("property")
+                .or_else(|| el.value().attr("name"));
+            if key.map(is_meta_image_key).unwrap_or(false) {
+                if let Some(v) = el.value().attr("content") {
+                    if let Some(p) = resolve_internal(v, path, &scan_root) {
+                        referenced_files.insert(p);
+                    }
+                }
+            }
+        }
 
         page_refs.insert(path.clone(), refs);
     }
@@ -185,6 +204,9 @@ pub fn run_links(root: &Path, config: &Config, json: bool) -> Result<i32> {
         "robots.txt",
         "sitemap.xml",
         "sitemap.txt",
+        "llms.txt",
+        "ads.txt",
+        "app-ads.txt",
         "manifest.json",
         "clone.yaml",
         "fragments.toml",
@@ -459,6 +481,16 @@ fn path_has_dotfile_component(path: &Path, root: &Path) -> bool {
             .map(|s| s.starts_with('.'))
             .unwrap_or(false)
     })
+}
+
+/// True for the `<meta>` `property`/`name` keys whose `content` is an
+/// image URL (Open Graph + Twitter card families). Shared shape with
+/// the same helper in `assets.rs`.
+pub(crate) fn is_meta_image_key(key: &str) -> bool {
+    matches!(
+        key,
+        "og:image" | "og:image:url" | "og:image:secure_url" | "twitter:image" | "twitter:image:src"
+    )
 }
 
 /// Parse a `srcset` attribute into its URL list. Each comma-separated

@@ -1367,6 +1367,94 @@ fn links_skips_platform_files_in_orphan_check() {
     );
 }
 
+#[test]
+fn links_skips_llms_txt_in_orphan_check() {
+    // llms.txt is a well-known root file fetched by convention (like
+    // robots.txt / sitemap.xml), never linked from HTML. Regression
+    // guard: surfaced dogfooding pagekit against the we-know-aeo site,
+    // where its own llms.txt was falsely flagged orphan.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(root.join("llms.txt"), "# llms.txt").unwrap();
+    fs::write(root.join("ads.txt"), "placeholder").unwrap();
+    fs::write(root.join("a.html"), "<html><body></body></html>").unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_links(root);
+    assert!(
+        output.status.success(),
+        "llms.txt / ads.txt must NOT be flagged as orphans:\nstdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn links_counts_meta_social_card_images() {
+    // og:image / twitter:image point at real asset files but live in
+    // <meta content="…">, not href/src. They must count toward the
+    // reference graph so the image is not flagged orphan. Regression
+    // guard from the we-know-aeo dogfood (og-image.png false orphan).
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(root.join("og-image.png"), b"\x89PNG").unwrap();
+    fs::write(root.join("twitter-card.png"), b"\x89PNG").unwrap();
+    fs::write(root.join("truly-orphan.png"), b"\x89PNG").unwrap();
+    fs::write(
+        root.join("a.html"),
+        r#"<html><head>
+<meta property="og:image" content="/og-image.png">
+<meta name="twitter:image" content="twitter-card.png">
+</head><body></body></html>"#,
+    )
+    .unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_links(root);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        !stdout.contains("og-image.png (no references)"),
+        "og:image-referenced asset must NOT be orphan:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("twitter-card.png (no references)"),
+        "twitter:image-referenced asset must NOT be orphan:\n{stdout}"
+    );
+    // The genuinely unreferenced image must still be flagged — the fix
+    // must not blanket-suppress orphan detection.
+    assert!(
+        stdout.contains("truly-orphan.png"),
+        "unreferenced image must still be flagged orphan:\n{stdout}"
+    );
+}
+
+#[test]
+fn assets_counts_meta_social_card_images() {
+    // Mirror of links: the asset graph must record a referenced-by edge
+    // for og:image / twitter:image targets, not an orphan line.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(root.join("og-image.png"), b"\x89PNG").unwrap();
+    fs::write(
+        root.join("a.html"),
+        r#"<html><head><meta property="og:image" content="/og-image.png"></head><body></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_assets(root);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("/og-image.png\treferenced-by\t/a.html"),
+        "og:image target must record a referenced-by edge:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("/og-image.png\torphan\tyes"),
+        "og:image target must NOT be flagged orphan:\n{stdout}"
+    );
+}
+
 // --- seo ---
 
 fn clean_seo_page(title: &str, description: &str, canonical: &str) -> String {

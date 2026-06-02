@@ -53,6 +53,20 @@ pub fn run_assets(root: &Path, config: &Config, save: Option<PathBuf>) -> Result
                 }
             }
         }
+        // Social-card images (`<meta og:image / twitter:image content>`)
+        // reference real asset files; count them so the graph records a
+        // `referenced-by` edge instead of a spurious orphan flag.
+        for el in doc.select(&Selector::parse("meta[content]").unwrap()) {
+            let key = el
+                .value()
+                .attr("property")
+                .or_else(|| el.value().attr("name"));
+            if key.map(crate::links::is_meta_image_key).unwrap_or(false) {
+                if let Some(v) = el.value().attr("content") {
+                    values.insert(v.to_string());
+                }
+            }
+        }
         for v in &values {
             if let Some(target) = resolve_internal(v, path, &scan_root) {
                 refs_from_pages
@@ -204,6 +218,9 @@ const PLATFORM_FILES: &[&str] = &[
     "robots.txt",
     "sitemap.xml",
     "sitemap.txt",
+    "llms.txt",
+    "ads.txt",
+    "app-ads.txt",
     "manifest.json",
     "clone.yaml",
     "fragments.toml",
