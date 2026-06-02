@@ -25,6 +25,6 @@ gated items speculatively. If idle, do baton/doc hygiene or wait for a consumer-
 
 ## Recent commits this session
 
-- (pending) fix: clippy while_let_on_iterator + fmt on agent-edit tooling; clear build-block
+- `75fe017` fix: clippy while_let_on_iterator + fmt on agent-edit tooling; clear build-block
 - `2c206ad` arc: record transient fragments build-block
 - `3a5384c` docs: reconverge surface with shipped binary
