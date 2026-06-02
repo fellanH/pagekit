@@ -9,7 +9,7 @@ name = "pagekit"
 path = "src/main.rs"
 
 [dependencies]
-fragments = { path = "../fragments" }
+fragments = { path = "../fragments", package = "fragments-sync" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }

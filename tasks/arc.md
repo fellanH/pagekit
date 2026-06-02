@@ -1,6 +1,6 @@
 # pagekit
 
-Binary ships. Sprints 4-7 closed; agent-tooling trajectory complete. Test suite green: 59 integration + 48 unit, clippy + fmt clean.
+Binary ships. Sprints 4-7 closed; agent-tooling trajectory complete. Test suite green: 64 integration + 48 unit, clippy + fmt clean. Agent-consumable substrate sprint shipped (`--json` on links/seo/a11y, uniform exit codes, normalize-paths safe-by-default).
 
 ## Active arc
 
@@ -48,4 +48,4 @@ Findings from running pagekit's checks against ettsmart.se on 2026-05-06. Surfac
 
 ## Blocked
 
-Nothing. (The transient `fragments` upstream build-block from 2026-06-02 cleared: fragments now compiles, `cargo build --release` green, 59 integ + 48 unit tests pass, clippy + fmt clean, binary shipped to `~/.local/bin/pagekit`.)
+Nothing. The `fragments` crate published as `fragments-sync` v0.7.0 (committed `3ca4e75`); pagekit's `Cargo.toml` adopted `package = "fragments-sync"` (lib target still `fragments`, so `use fragments::…` is unchanged). Build green, 64 integ + 48 unit pass, clippy + fmt clean, binary shipped to `~/.local/bin/pagekit`.

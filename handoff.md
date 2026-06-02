@@ -4,27 +4,34 @@ _Updated 2026-06-02 (felix). Boot order: this file → `AGENTS.md` → `tasks/ar
 
 ## State
 
-Feature-complete (Phases 1–3), **no active sprint**. Worker-tier persona, cd-into.
-Shipped surface is in `AGENTS.md` "Skills in scope" (matches `pagekit --help`).
-Release build green, binary shipped to `~/.local/bin/pagekit` (v0.1.0).
+Feature-complete, **no active sprint, no open blockers**. Build green, binary shipped to
+`~/.local/bin/pagekit` (v0.1.0, includes this sprint's surface).
 
-## No open blockers
+Latest sprint — agent-consumable substrate (`2bab3de` + `<this commit>`):
+- **#1 `--json`** on `links`/`seo`/`a11y` — envelope `{check,status,findings:[{rule,severity,page?,message}]}`
+  via `src/report.rs`. Agents deserialize instead of regexing. Exit code unchanged. (inventory/assets
+  already emit TSV; `doctor`/`check` route through the fragments lib → deferred, would need upstream work.)
+- **#2 uniform exit codes** — `check`/`doctor` now exit `2` on findings, matching the rest. `2` = "something to act on."
+- **#3 `normalize-paths` safe-by-default** — dry-run unless `--write`, exit `2` on pending changes.
+- Held the polish (`--skip`/`--only`/`--policy`/`-q`/`--diff`) per subtract-before-building.
+- Tests: 64 integ + 48 unit, clippy + fmt clean.
 
-The transient `fragments` upstream build-block (2026-06-02) is **cleared**: fragments compiles,
-`cargo build --release` is green, `cargo test` passes (59 integ + 48 unit), clippy + fmt clean.
-Binary shipped via `cp target/release/pagekit ~/.local/bin/pagekit`.
+## fragments dependency note (resolved)
 
-While verifying, found two committed-but-stale checks from `cc12ec8` and fixed them:
-a clippy `while_let_on_iterator` in `src/rename_assets.rs` and unformatted code in
-`apply_rules.rs`/`rename_assets.rs`. Both now clean (see commit below).
+The `fragments` crate published as **`fragments-sync` v0.7.0** (crates.io prep, committed `3ca4e75`).
+pagekit's `Cargo.toml` now uses `fragments = { path = "../fragments", package = "fragments-sync" }` — the
+lib target is still `fragments`, so `use fragments::…` is unchanged throughout the source. Build is green
+against the committed rename. (Earlier this session the rename was mid-flight and transiently blocked the
+build; that's done.)
 
 ## Then
 
-Nothing dispatched. All `tasks/arc.md` backlog items are trigger-gated (no trigger fired). Don't pull
-gated items speculatively. If idle, do baton/doc hygiene or wait for a consumer-driven trigger.
+Nothing dispatched. `tasks/arc.md` backlog is trigger-gated (no trigger fired). Don't pull gated items
+speculatively. If idle, do baton/doc hygiene or wait for a consumer-driven trigger.
 
 ## Recent commits this session
 
-- `75fe017` fix: clippy while_let_on_iterator + fmt on agent-edit tooling; clear build-block
-- `2c206ad` arc: record transient fragments build-block
-- `3a5384c` docs: reconverge surface with shipped binary
+- `<this commit>` chore: adopt fragments-sync package name (rename landed upstream)
+- `2bab3de` feat: --json output, uniform exit codes, normalize-paths safe-by-default
+- `a5c0b67` docs: record fix commit hash in handoff baton
+- `75fe017` fix: clippy + fmt on agent-edit tooling
