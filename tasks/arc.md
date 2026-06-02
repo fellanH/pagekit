@@ -60,6 +60,17 @@ Findings from running pagekit's checks against ettsmart.se on 2026-05-06. Surfac
 - **`pagekit seo`** — 3 missing canonicals (`/thank-you/`, `/sv/thank-you/`, `/test/`); 11 missing meta descriptions on SV subpages; 8 multiple-H1 warnings on Webflow templates; 25 missing OG-tag warnings; 1 duplicate-description; canonical www→apex mismatch (declared canonicals all use `www.ettsmart.se` but live deploy serves apex — needs `expected_origin` config to auto-flag, see backlog)
 - **`pagekit a11y`** — 4 unlabeled honeypot anti-spam fields (`<input name="website">` without proper hiding) on contact forms
 
+## Pending coordinator decision (do NOT action either side)
+
+- **Suite-wide `--json`/exit-code standard (relay 2026-06-02, FYI-only).** pagekit emits
+  `{status: "pass"|"fail"}` + exit `2`; the published core `fragments-sync` v0.8.0 emits
+  `{ok: bool}` + exit `1`, documented with a stable-schema promise. Coordinator flagged for a
+  suite-standard decision. The non-breaking direction is **pagekit→fragments** (adopt `ok`/exit-1)
+  since fragments is published+stable and pagekit is v0.1.0 unpublished — but it is the **coordinator's
+  call**, not yet decided. Do NOT change pagekit's envelope or exit codes until the standard lands.
+  (Note: the `site-health-audit` connector keys off `severity`, not `status`, so it is unaffected
+  either way; only the exit-code semantics would shift.)
+
 ## Blocked
 
 Nothing. The `fragments` crate published as `fragments-sync` v0.7.0 (committed `3ca4e75`); pagekit's `Cargo.toml` adopted `package = "fragments-sync"` (lib target still `fragments`, so `use fragments::…` is unchanged). Build green, 64 integ + 48 unit pass, clippy + fmt clean, binary shipped to `~/.local/bin/pagekit`.
