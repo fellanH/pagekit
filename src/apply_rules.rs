@@ -66,7 +66,8 @@ pub fn run_apply(
 
         if new_content != content {
             if write {
-                fs::write(path, &new_content).with_context(|| format!("writing {}", path.display()))?;
+                fs::write(path, &new_content)
+                    .with_context(|| format!("writing {}", path.display()))?;
             }
             affected_files.insert(path.clone(), new_content);
         }
@@ -184,7 +185,10 @@ impl ScopeSpec {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(tag = "op", rename_all = "snake_case")]
 enum StepSpec {
-    RenameTag { from: String, to: String },
+    RenameTag {
+        from: String,
+        to: String,
+    },
     SetAttr {
         selector: String,
         attr: String,
@@ -194,7 +198,10 @@ enum StepSpec {
 
 #[derive(Debug, Clone)]
 enum Step {
-    RenameTag { from: String, to: String },
+    RenameTag {
+        from: String,
+        to: String,
+    },
     SetAttr {
         selector: String,
         attr: String,
@@ -283,8 +290,8 @@ fn replace_tag_starts(s: &str, from: &str, to: &str) -> String {
     while i < bytes.len() {
         if i + pat_b.len() <= bytes.len() && &bytes[i..i + pat_b.len()] == pat_b {
             let j = i + pat_b.len();
-            let ok = j >= bytes.len()
-                || matches!(bytes[j], b'>' | b'/' | b'\t' | b'\n' | b'\r' | b' ');
+            let ok =
+                j >= bytes.len() || matches!(bytes[j], b'>' | b'/' | b'\t' | b'\n' | b'\r' | b' ');
             if ok {
                 out.push('<');
                 out.push_str(to);
@@ -314,7 +321,9 @@ fn apply_set_attr(
 
     match scope {
         Scope::WholeDocument => rewrite_set_attr_lol_html(content, selector, attr, value),
-        Scope::Selector { selector: scope_sel } => {
+        Scope::Selector {
+            selector: scope_sel,
+        } => {
             let combined = format!("{scope_sel} {selector}");
             rewrite_set_attr_lol_html(content, &combined, attr, value)
         }
@@ -326,7 +335,12 @@ fn apply_set_attr(
     }
 }
 
-fn rewrite_set_attr_lol_html(content: &str, selector: &str, attr: &str, value: &str) -> Result<String> {
+fn rewrite_set_attr_lol_html(
+    content: &str,
+    selector: &str,
+    attr: &str,
+    value: &str,
+) -> Result<String> {
     let mut output: Vec<u8> = Vec::new();
     {
         let selector = selector.to_string();
@@ -366,7 +380,11 @@ fn split_marker_region_fragment_prefix<'a>(
         .find(&close)
         .ok_or_else(|| anyhow!("marker close not found: {close}"))?;
     let end = after_open + end_rel;
-    Ok((&content[..after_open], &content[after_open..end], &content[end..]))
+    Ok((
+        &content[..after_open],
+        &content[after_open..end],
+        &content[end..],
+    ))
 }
 
 fn target_matches_path(
@@ -377,9 +395,9 @@ fn target_matches_path(
 ) -> Result<bool> {
     match target {
         Target::AllPages => Ok(true),
-        Target::PagesWithMarker { name } => Ok(content.contains(&format!(
-            "<!-- {marker_prefix}:{name} -->"
-        ))),
+        Target::PagesWithMarker { name } => {
+            Ok(content.contains(&format!("<!-- {marker_prefix}:{name} -->")))
+        }
         Target::PagesMatchingSelector { selector } => {
             let sel = Selector::parse(selector)
                 .map_err(|e| anyhow!("invalid selector '{selector}': {e:?}"))?;
@@ -444,11 +462,10 @@ mod tests {
 <h2>Outside</h2>
 </body></html>"#;
 
-        let out = apply_rename_tag(html, &Scope::Marker { name: "cta".into() }, "h2", "h3")
-            .unwrap();
+        let out =
+            apply_rename_tag(html, &Scope::Marker { name: "cta".into() }, "h2", "h3").unwrap();
         assert!(out.contains("<h3 class=\"t\">Hi</h3>"));
         assert!(out.contains("<H3>Yo</H3>"));
         assert!(out.contains("<h2>Outside</h2>"));
     }
 }
-

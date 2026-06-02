@@ -50,7 +50,8 @@ pub fn run_mv_asset(
         &config.core.exclude_dirs,
         config.core.max_depth,
     );
-    let css_files = collect_files_by_ext(&scan_root, &fragments_dir, &config.core.exclude_dirs, "css");
+    let css_files =
+        collect_files_by_ext(&scan_root, &fragments_dir, &config.core.exclude_dirs, "css");
 
     let mut modified: BTreeSet<PathBuf> = BTreeSet::new();
 
@@ -61,7 +62,8 @@ pub fn run_mv_asset(
         let new_content = rewrite_html_refs(&content, path, &scan_root, &from_abs, &to_abs)?;
         if new_content != content {
             if write {
-                fs::write(path, &new_content).with_context(|| format!("writing {}", path.display()))?;
+                fs::write(path, &new_content)
+                    .with_context(|| format!("writing {}", path.display()))?;
             }
             modified.insert(path.clone());
         }
@@ -69,8 +71,8 @@ pub fn run_mv_asset(
 
     // CSS rewrite pass.
     for css_path in &css_files {
-        let body =
-            fs::read_to_string(css_path).with_context(|| format!("reading {}", css_path.display()))?;
+        let body = fs::read_to_string(css_path)
+            .with_context(|| format!("reading {}", css_path.display()))?;
         let new_body = rewrite_css_urls(&body, css_path, &scan_root, &from_abs, &to_abs)?;
         if new_body != body {
             if write {
@@ -84,8 +86,7 @@ pub fn run_mv_asset(
     // Finally, move the file (only in write mode).
     if write {
         if let Some(parent) = to_abs.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("creating {}", parent.display()))?;
+            fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
         }
         fs::rename(&from_abs, &to_abs).with_context(|| {
             format!(
@@ -131,9 +132,8 @@ fn rewrite_html_refs(
                             if let Some(new_v) =
                                 rewrite_one_ref(&v, &page_dir, &scan_root, &from_abs, &to_abs)
                             {
-                                el.set_attribute(attr, &new_v).map_err(|e| {
-                                    anyhow::anyhow!("set_attribute({attr}): {e}")
-                                })?;
+                                el.set_attribute(attr, &new_v)
+                                    .map_err(|e| anyhow::anyhow!("set_attribute({attr}): {e}"))?;
                             }
                         }
                     }
@@ -338,7 +338,10 @@ fn collect_files_by_ext(
             if p.starts_with(fragments_dir) {
                 return false;
             }
-            if exclude_dirs.iter().any(|d| p.starts_with(scan_root.join(d))) {
+            if exclude_dirs
+                .iter()
+                .any(|d| p.starts_with(scan_root.join(d)))
+            {
                 return false;
             }
             !path_has_dotfile_component(p, scan_root)
@@ -364,4 +367,3 @@ fn path_has_dotfile_component(path: &Path, root: &Path) -> bool {
 mod tests {
     // (No unit tests yet: the core rewrite path canonicalizes via the filesystem.)
 }
-

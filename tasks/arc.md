@@ -1,6 +1,6 @@
 # pagekit
 
-Binary ships. Sprints 4-7 closed; agent-tooling trajectory complete. Test suite green: 59 integration + 46 unit, clippy + fmt clean.
+Binary ships. Sprints 4-7 closed; agent-tooling trajectory complete. Test suite green: 59 integration + 48 unit, clippy + fmt clean.
 
 ## Active arc
 
@@ -48,4 +48,4 @@ Findings from running pagekit's checks against ettsmart.se on 2026-05-06. Surfac
 
 ## Blocked
 
-**Release build blocked on upstream `fragments` (transient, 2026-06-02).** `cargo build --release` fails because the `fragments` path-dep (`../fragments`) is mid-refactor and uncommitted: it's adding a configurable `[syntax]` comment-syntax table (`src/syntax.rs` new, `config.rs`/`sync.rs` rewired to `config.syntax_for`) but `src/lib.rs` lacks `pub mod syntax;`. A live `fragments` session owns this work; heads-up relayed. pagekit's own tree is clean and references none of the new API — once fragments compiles, pagekit builds green. **Next agent:** rebuild release, run `cargo test` to re-verify the "green" claim above (59 integ + 46 unit), then ship to `~/.local/bin/pagekit`.
+Nothing. (The transient `fragments` upstream build-block from 2026-06-02 cleared: fragments now compiles, `cargo build --release` green, 59 integ + 48 unit tests pass, clippy + fmt clean, binary shipped to `~/.local/bin/pagekit`.)

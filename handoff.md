@@ -5,18 +5,18 @@ _Updated 2026-06-02 (felix). Boot order: this file → `AGENTS.md` → `tasks/ar
 ## State
 
 Feature-complete (Phases 1–3), **no active sprint**. Worker-tier persona, cd-into.
-Shipped surface is in `AGENTS.md` "Skills in scope" (reconverged today to match `pagekit --help`).
+Shipped surface is in `AGENTS.md` "Skills in scope" (matches `pagekit --help`).
+Release build green, binary shipped to `~/.local/bin/pagekit` (v0.1.0).
 
-## ⚠️ One open item — release build blocked upstream (transient)
+## No open blockers
 
-`cargo build --release` currently **fails**, not in pagekit but in the `fragments` path-dep (`../fragments`):
-it's mid-refactor adding a `[syntax]` comment-syntax table — `src/syntax.rs` (new), `config.rs`/`sync.rs`
-rewired to `config.syntax_for`, but `src/lib.rs` is missing `pub mod syntax;`. A live `fragments` session
-owns this; heads-up already relayed. pagekit's own tree is clean and uses none of the new API.
+The transient `fragments` upstream build-block (2026-06-02) is **cleared**: fragments compiles,
+`cargo build --release` is green, `cargo test` passes (59 integ + 48 unit), clippy + fmt clean.
+Binary shipped via `cp target/release/pagekit ~/.local/bin/pagekit`.
 
-**Next agent, do this first:** retry `cargo build --release`. Once fragments compiles →
-`cargo test` (expect 59 integ + 46 unit green, clippy + fmt clean) → ship `cp target/release/pagekit ~/.local/bin/pagekit`.
-Then this blocker is cleared — update `tasks/arc.md` "Blocked" back to "Nothing."
+While verifying, found two committed-but-stale checks from `cc12ec8` and fixed them:
+a clippy `while_let_on_iterator` in `src/rename_assets.rs` and unformatted code in
+`apply_rules.rs`/`rename_assets.rs`. Both now clean (see commit below).
 
 ## Then
 
@@ -25,6 +25,6 @@ gated items speculatively. If idle, do baton/doc hygiene or wait for a consumer-
 
 ## Recent commits this session
 
+- (pending) fix: clippy while_let_on_iterator + fmt on agent-edit tooling; clear build-block
 - `2c206ad` arc: record transient fragments build-block
 - `3a5384c` docs: reconverge surface with shipped binary
-- `c9616b8` agents: fix dead boot path (workspaces→products)

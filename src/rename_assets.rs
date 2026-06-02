@@ -61,9 +61,14 @@ pub fn run_rename_assets(root: &Path, config: &Config, write: bool) -> Result<us
         &config.core.exclude_dirs,
         config.core.max_depth,
     );
-    let css_files = collect_files_by_ext(&scan_root, &fragments_dir, &config.core.exclude_dirs, "css");
-    let json_files =
-        collect_files_by_ext(&scan_root, &fragments_dir, &config.core.exclude_dirs, "json");
+    let css_files =
+        collect_files_by_ext(&scan_root, &fragments_dir, &config.core.exclude_dirs, "css");
+    let json_files = collect_files_by_ext(
+        &scan_root,
+        &fragments_dir,
+        &config.core.exclude_dirs,
+        "json",
+    );
 
     let map = make_map(&plan)?;
 
@@ -75,15 +80,16 @@ pub fn run_rename_assets(root: &Path, config: &Config, write: bool) -> Result<us
         let new_content = rewrite_html_with_map(&content, path, &scan_root, &map)?;
         if new_content != content {
             if write {
-                fs::write(path, &new_content).with_context(|| format!("writing {}", path.display()))?;
+                fs::write(path, &new_content)
+                    .with_context(|| format!("writing {}", path.display()))?;
             }
             modified.insert(path.clone());
         }
     }
 
     for css_path in &css_files {
-        let body =
-            fs::read_to_string(css_path).with_context(|| format!("reading {}", css_path.display()))?;
+        let body = fs::read_to_string(css_path)
+            .with_context(|| format!("reading {}", css_path.display()))?;
         let new_body = rewrite_css_with_map(&body, css_path, &scan_root, &map)?;
         if new_body != body {
             if write {
@@ -95,8 +101,8 @@ pub fn run_rename_assets(root: &Path, config: &Config, write: bool) -> Result<us
     }
 
     for json_path in &json_files {
-        let body =
-            fs::read_to_string(json_path).with_context(|| format!("reading {}", json_path.display()))?;
+        let body = fs::read_to_string(json_path)
+            .with_context(|| format!("reading {}", json_path.display()))?;
         let new_body = rewrite_json_with_map(&body, json_path, &scan_root, &map)?;
         if new_body != body {
             if write {
@@ -111,14 +117,11 @@ pub fn run_rename_assets(root: &Path, config: &Config, write: bool) -> Result<us
     if write {
         for (from, to) in &plan {
             if let Some(parent) = to.parent() {
-                fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("creating {}", parent.display()))?;
             }
             fs::rename(from, to).with_context(|| {
-                format!(
-                    "renaming asset {} -> {}",
-                    from.display(),
-                    to.display()
-                )
+                format!("renaming asset {} -> {}", from.display(), to.display())
             })?;
         }
     }
@@ -154,7 +157,10 @@ fn build_spaces_to_hyphens_plan(
             if p.starts_with(fragments_dir) {
                 return false;
             }
-            if exclude_dirs.iter().any(|d| p.starts_with(scan_root.join(d))) {
+            if exclude_dirs
+                .iter()
+                .any(|d| p.starts_with(scan_root.join(d)))
+            {
                 return false;
             }
             !path_has_dotfile_component(p, scan_root)
@@ -226,7 +232,9 @@ type AbsMap = BTreeMap<PathBuf, PathBuf>;
 fn make_map(plan: &[(PathBuf, PathBuf)]) -> Result<AbsMap> {
     let mut map: AbsMap = BTreeMap::new();
     for (from, to) in plan {
-        let from_abs = from.canonicalize().with_context(|| format!("canonicalizing {}", from.display()))?;
+        let from_abs = from
+            .canonicalize()
+            .with_context(|| format!("canonicalizing {}", from.display()))?;
         let to_abs = if to.is_absolute() {
             to.to_path_buf()
         } else {
@@ -258,15 +266,18 @@ fn rewrite_html_with_map(
                 element_content_handlers: vec![element!("*", move |el: &mut Element| {
                     for attr in ["src", "href"] {
                         if let Some(v) = el.get_attribute(attr) {
-                            if let Some(new_v) = rewrite_value_with_map(&v, &page_dir, &scan_root, &map) {
-                                el.set_attribute(attr, &new_v).map_err(|e| {
-                                    anyhow::anyhow!("set_attribute({attr}): {e}")
-                                })?;
+                            if let Some(new_v) =
+                                rewrite_value_with_map(&v, &page_dir, &scan_root, &map)
+                            {
+                                el.set_attribute(attr, &new_v)
+                                    .map_err(|e| anyhow::anyhow!("set_attribute({attr}): {e}"))?;
                             }
                         }
                     }
                     if let Some(v) = el.get_attribute("srcset") {
-                        if let Some(new_v) = rewrite_srcset_with_map(&v, &page_dir, &scan_root, &map) {
+                        if let Some(new_v) =
+                            rewrite_srcset_with_map(&v, &page_dir, &scan_root, &map)
+                        {
                             el.set_attribute("srcset", &new_v)
                                 .map_err(|e| anyhow::anyhow!("set_attribute(srcset): {e}"))?;
                         }
@@ -328,7 +339,12 @@ fn rewrite_srcset_with_map(
     }
 }
 
-fn rewrite_css_with_map(css: &str, css_path: &Path, scan_root: &Path, map: &AbsMap) -> Result<String> {
+fn rewrite_css_with_map(
+    css: &str,
+    css_path: &Path,
+    scan_root: &Path,
+    map: &AbsMap,
+) -> Result<String> {
     let urls = extract_url_refs(css);
     if urls.is_empty() {
         return Ok(css.to_string());
@@ -372,7 +388,7 @@ fn rewrite_json_with_map(
         out.push('"');
         let mut buf = String::new();
         let mut escaped = false;
-        while let Some(c) = chars.next() {
+        for c in chars.by_ref() {
             if escaped {
                 buf.push(c);
                 escaped = false;
@@ -386,7 +402,9 @@ fn rewrite_json_with_map(
             if c == '"' {
                 // End.
                 let candidate = unescape_json_string_minimal(&buf);
-                if let Some(new_val) = rewrite_value_with_map(&candidate, source_dir, scan_root, map) {
+                if let Some(new_val) =
+                    rewrite_value_with_map(&candidate, source_dir, scan_root, map)
+                {
                     // Re-escape minimal JSON characters.
                     out.push_str(&escape_json_string_minimal(&new_val));
                 } else {
@@ -548,7 +566,10 @@ fn collect_files_by_ext(
             if p.starts_with(fragments_dir) {
                 return false;
             }
-            if exclude_dirs.iter().any(|d| p.starts_with(scan_root.join(d))) {
+            if exclude_dirs
+                .iter()
+                .any(|d| p.starts_with(scan_root.join(d)))
+            {
                 return false;
             }
             !path_has_dotfile_component(p, scan_root)
@@ -574,4 +595,3 @@ fn display_url(path: &Path, scan_root: &Path) -> String {
     let rel = path.strip_prefix(scan_root).unwrap_or(path);
     format!("/{}", rel.display())
 }
-
