@@ -33,6 +33,16 @@ work" because they route through the fragments lib) is partly unblocked — the 
 necessary precondition. Still trigger-gated; pagekit would need fragments to expose structured return values
 from `run_doctor`/check (not yet present) before it can emit JSON there. No trigger fired — left for a consumer.
 
+## Dogfood hardening (2026-06-02, `cd9b898`)
+
+Ran the full audit against `~/omni/products/we-know-aeo` (AEO offer's own Next-export site). No crashes;
+exit codes correct. Fixed two orphan-detection false positives in `links`/`assets`: (1) `<meta og:image /
+twitter:image content>` now counts toward the reference graph (was a false orphan + social-card blind spot);
+(2) `llms.txt`/`ads.txt`/`app-ads.txt` whitelisted as well-known root files (class of robots.txt/sitemap.xml).
++3 integ tests (now **67 integ + 48 unit**). BUG-3 (broken-link check on meta images) deferred → arc backlog.
+Real site findings (broken privacy/terms Next export → 404 titles, missing canonicals, etc.) are **weknowaeo's**,
+not pagekit's — captured in `todo/2026-06-02-dogfood-weknowaeo.md` for relay.
+
 ## Then
 
 Nothing dispatched. `tasks/arc.md` backlog is trigger-gated (no trigger fired). Don't pull gated items
