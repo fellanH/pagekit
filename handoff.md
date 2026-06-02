@@ -18,11 +18,20 @@ Latest sprint — agent-consumable substrate (`2bab3de` + `1b67de8`):
 
 ## fragments dependency note (resolved)
 
-The `fragments` crate published as **`fragments-sync` v0.7.0** (crates.io prep, committed `3ca4e75`).
-pagekit's `Cargo.toml` now uses `fragments = { path = "../fragments", package = "fragments-sync" }` — the
-lib target is still `fragments`, so `use fragments::…` is unchanged throughout the source. Build is green
-against the committed rename. (Earlier this session the rename was mid-flight and transiently blocked the
-build; that's done.)
+The `fragments` crate published as **`fragments-sync`** (crates.io prep; rename committed `3ca4e75` at v0.7.0).
+pagekit's `Cargo.toml` uses `fragments = { path = "../fragments", package = "fragments-sync" }` — the
+lib target is still `fragments`, so `use fragments::…` is unchanged throughout the source.
+
+**Dep baseline now `fragments-sync` v0.8.0 (`../fragments` HEAD `d5a6d2d`)** — fragments QoL pass added library
+purity (lib is now **stdout-silent**, so pagekit's `sync` output is clean) + `--json` on fragments' own
+check/list/doctor. **Backward-compatible**: `sync_all`/`sync_all_with` keep `usize`, `list_fragments`/`run_doctor`
+signatures unchanged. New opt-in `sync_all_paths()`/`sync_all_paths_with()` → `Vec<PathBuf>` (unused by pagekit).
+Verified green against pagekit's 112 tests (48 unit + 64 integ), clippy + fmt clean — this session, 2026-06-02.
+
+Side effect for the deferred item: the `--json`-on-`check`/`doctor` caveat (handoff #1, "would need upstream
+work" because they route through the fragments lib) is partly unblocked — the lib is now stdout-silent, the
+necessary precondition. Still trigger-gated; pagekit would need fragments to expose structured return values
+from `run_doctor`/check (not yet present) before it can emit JSON there. No trigger fired — left for a consumer.
 
 ## Then
 
