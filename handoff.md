@@ -88,17 +88,38 @@ Drained 5 undrained items in `~/.omni/relay-inbox/pagekit/` (marked `.done`):
   hardcoded HTML policy to a `[policy]` config block on the *next* whitelist edit (not now); (b) keep
   migration-verification opinions out of pagekit (cross-connector boundary).
 
+## Core-vs-opinion review (2026-06-02, `a07af1d`) — DONE, no refactor
+
+Felix first-principles directive delivered: `docs/core-vs-opinion.md` — read-only review+proposal,
+**no code touched (refactor is RED)**. Conclusion: macro-architecture already correct (`fragments` =
+mechanism core, pagekit = HTML-opinion connector, clean `SyncHook`/flatten seam). Two trigger-gated
+wins, both *inside* the connector: **(A)** dedup the forked site-model/emit-to-vanilla mechanism
+(`display_url` ×6, `resolve_internal` ×4, etc.) into an internal `sitemodel` module; **(B)** turn
+hardcoded opinion (whitelists/thresholds) into a `[policy]` config block on the next whitelist edit.
+Both logged in `tasks/arc.md` Decisions. Do NOT do them speculatively.
+
+## QUEUED for next capacity window (coordinator receipt `20260602210710`)
+
+Pitch *Site Health Audit* scored **8/8** (strongest this round). Disposition:
+- **GTM/billable-offer = PARKED** behind Felix's active distribution hold (not killed) — logged ready
+  for studio+/strategist when he lifts it. **Do not pursue the offer build.**
+- **GREEN internal slice = QUEUED** (tooling-refinement-aligned): `verify (links/seo/a11y/preflight)
+  → --json → /present branded HTML report`. The mechanism all ships (`--json` + uniform exit codes);
+  this is packaging output into a client-facing report. Pick up in a fresh window — it was explicitly
+  "don't pile it on now." Honest scope per migration relay: structural+SEO+a11y defects only; visual
+  diff is the migration connector's job.
+
 ## Then
 
-CAND-A + CAND-B done. `tasks/arc.md` backlog is now all trigger-gated — **don't pull gated items
-speculatively.** If idle: baton/doc hygiene, or wait for a consumer-driven trigger. CAND-C (low-confidence
-`_`-prefix SEO skip) stays deferred until a consumer complains. Live consumer signal would unblock the
-trigger-gated items (image-dims, expected_origin, framework profiles, meta-image broken-link BUG-3).
+**Top of the list: the QUEUED GREEN slice above** (Site Health Audit report — verify → `--json` →
+`/present`), coordinator-approved for a fresh window. Everything else stays trigger-gated:
+`tasks/arc.md` backlog (image-dims, expected_origin, framework profiles, meta-image BUG-3), the two
+core-vs-opinion refactors (A: `sitemodel` dedup, B: `[policy]` config), CAND-C. **Don't pull gated
+items speculatively** — wait for a consumer trigger or the GREEN slice's window.
 
-## Recent commits this session
+## Recent commits
 
+- `a07af1d` docs: core-vs-opinion review+proposal (first-principles, no refactor)
+- `a0b3f17` docs: drain relay-inbox + first-principles minimal-core/connector decision
 - `4186730` fix: CAND-A preflight stale-list + CAND-B skip non-web source files in orphan checks
-
-Prior sessions:
-- `1b67de8` chore: adopt fragments-sync package name (rename landed upstream)
 - `2bab3de` feat: --json output, uniform exit codes, normalize-paths safe-by-default
