@@ -15,6 +15,8 @@ Binary ships. Sprints 4-7 closed; agent-tooling trajectory complete. Test suite 
 
 Phase 4 candidates (image dims, semantic variant naming, framework profiles, expected_origin config) remain trigger-gated. No active sprint planned.
 
+**Site Health Audit connector shipped (2026-06-02).** The coordinator-approved GREEN slice (`verify → --json → branded HTML report`) landed as `connectors/site-health-audit/audit.py` — a presentation connector OUTSIDE the binary that aggregates `pagekit links|seo|a11y --json` into one self-contained branded HTML report, styled via `packages/ui` tokens. No Rust touched (charter "no GUI" + minimal-core/connectors). Dogfooded against we-know-aeo + knowledge-base, headless-screenshot verified. The billable GTM offer of the same name stays PARKED behind Felix's distribution hold.
+
 **Sprint 6 closed (Phase 2).** `pagekit links`, `pagekit seo`, `pagekit a11y`, generalized `check --strict --selector`. Sprint folder: [`sprints/2026-05-correctness-checks/`](../sprints/2026-05-correctness-checks/README.md).
 
 **Sprint 5 closed (Phase 1).** Both deliverables shipped: `pagekit inventory` (commit `cdfd2e7`) and `pagekit normalize-paths` (commit `efc39a7`). Sprint folder: [`sprints/2026-05-query-layer/`](../sprints/2026-05-query-layer/README.md).

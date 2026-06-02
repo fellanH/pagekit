@@ -11,7 +11,26 @@ Feature-complete, **no active sprint, no open blockers**. Build green, binary sh
 > (cargo bin precedes `~/.local/bin`). Ship to **both** after a build, or `which pagekit` runs stale.
 > This session shipped to both.
 
-## Latest session — CAND-A + CAND-B landed (2026-06-02, `4186730`)
+## Latest session — GREEN slice landed: Site Health Audit report (2026-06-02)
+
+The coordinator-approved QUEUED slice (`verify → --json → branded HTML report`) is **done,
+runnable, dogfooded**. Built as a **presentation connector OUTSIDE the binary** —
+`connectors/site-health-audit/audit.py` (Python stdlib only). No Rust touched; pagekit
+stays pure mechanism (charter "no GUI" + `minimal-core-connectors` + `design-system-compliance`).
+
+- Runs `pagekit <site> links|seo|a11y --json`, aggregates the 3 envelopes, renders ONE
+  self-contained branded HTML report (CSS inlined → client-deliverable as-is).
+- Styling reads the omni `packages/ui` tokens (`tokens.css`+`theme.css`) at render time →
+  stays in lockstep with the design system, no hand-rolled CSS.
+- Exit code mirrors the suite: `0` all-pass, `2` a check failed (≥1 error). Warnings advisory.
+- Dogfooded: `we-know-aeo` (1 error + 19 warns → red verdict, 20-row SEO table) and
+  `stormfors/knowledge-base` (warns-only → exit 0). Headless-screenshot verified the render.
+- Scope held honest per migration relay: structural+SEO+a11y only; visual-diff/parity stay
+  in the migration connector. README documents the boundary.
+- **Offer build still PARKED** behind Felix's distribution hold — this is the internal tooling
+  slice only, not the billable "Site Health Audit" GTM offer. Do not pursue the offer.
+
+## Earlier session — CAND-A + CAND-B landed (2026-06-02, `4186730`)
 
 The two dogfood fix-candidates from the knowledge-base audit are **done, shipped, verified**:
 - **CAND-A** — `preflight`'s `== check ==` section now lists every stale/malformed page (not just a
@@ -103,19 +122,16 @@ Both logged in `tasks/arc.md` Decisions. Do NOT do them speculatively.
 Pitch *Site Health Audit* scored **8/8** (strongest this round). Disposition:
 - **GTM/billable-offer = PARKED** behind Felix's active distribution hold (not killed) — logged ready
   for studio+/strategist when he lifts it. **Do not pursue the offer build.**
-- **GREEN internal slice = QUEUED** (tooling-refinement-aligned): `verify (links/seo/a11y/preflight)
-  → --json → /present branded HTML report`. The mechanism all ships (`--json` + uniform exit codes);
-  this is packaging output into a client-facing report. Pick up in a fresh window — it was explicitly
-  "don't pile it on now." Honest scope per migration relay: structural+SEO+a11y defects only; visual
-  diff is the migration connector's job.
+- **GREEN internal slice = ✅ DONE** (this session) — `connectors/site-health-audit/audit.py`. See
+  "Latest session" above. The packaging slice is closed; only the GTM offer remains parked.
 
 ## Then
 
-**Top of the list: the QUEUED GREEN slice above** (Site Health Audit report — verify → `--json` →
-`/present`), coordinator-approved for a fresh window. Everything else stays trigger-gated:
+**No active sprint; the GREEN slice is closed.** Everything left is trigger-gated:
 `tasks/arc.md` backlog (image-dims, expected_origin, framework profiles, meta-image BUG-3), the two
 core-vs-opinion refactors (A: `sitemodel` dedup, B: `[policy]` config), CAND-C. **Don't pull gated
-items speculatively** — wait for a consumer trigger or the GREEN slice's window.
+items speculatively** — wait for a consumer trigger. Connector next-steps if a consumer asks:
+preflight summary row in the report, multi-site roll-up, or `--json` aggregate output.
 
 ## Recent commits
 

@@ -65,6 +65,8 @@ Full shipped surface (ground truth: `pagekit --help`):
 
 Still gated (no trigger fired): framework-export profiles for Webflow/Bootstrap-class layouts; Phase 4 candidates in `tasks/arc.md` backlog.
 
+**Connectors** (`connectors/`) — presentation/composition layers OVER the binary's mechanism, kept out of the binary itself (charter "no GUI" + `minimal-core-connectors`). Current: `site-health-audit/` — aggregates `links|seo|a11y --json` into one branded client-facing HTML report via `packages/ui` tokens. See its README.
+
 ## Tools in scope
 
 - `cargo build --release` for builds
