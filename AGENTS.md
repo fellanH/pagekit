@@ -54,10 +54,14 @@ This workspace does NOT:
 
 Full shipped surface (ground truth: `pagekit --help`):
 
-- **Build/edit:** `init`, `extract` (+ `--split-variants`), `sync`, `watch`, `normalize-paths`, `file-paths`, `list`, `config`. `extract` source-rewrite runs on `lol_html` for byte-preserving wrap; cross-page detection uses `scraper`.
-- **Bulk edit** (safe-by-default — dry-run unless `--write`): `apply` (parameterized rule file), `mv-asset`, `rename-assets`.
+- **Build/edit:** `init`, `extract` (+ `--split-variants`), `sync`, `watch`, `list`, `config`. `extract` source-rewrite runs on `lol_html` for byte-preserving wrap; cross-page detection uses `scraper`.
+- **Bulk edit** (safe-by-default — dry-run unless `--write`): `apply` (parameterized rule file), `mv-asset`, `rename-assets`, `normalize-paths`.
 - **Read** (token-efficient): `inventory`, `show`, `assets`.
-- **Verify:** `check` (+ `--strict`, `--strict --selector`), `doctor`, `links`, `seo`, `a11y`, `preflight` (single go-live gate).
+- **Verify:** `check` (+ `--strict`, `--strict --selector`), `doctor`, `links` (+ `--json`), `seo` (+ `--json`), `a11y` (+ `--json`), `preflight` (single go-live gate).
+
+**Exit-code convention** (predictable substrate for agent gating): `0` = clean/pass, `2` = findings (broken links, SEO/a11y violations, stale/malformed markers, pending dry-run changes), runtime errors bubble up nonzero. Every verify command and every safe-by-default mutator follows this — `2` uniformly means "there is something to act on."
+
+**`--json`** (`links`, `seo`, `a11y`): emits `{check, status, findings:[{rule, severity, page?, message}]}` instead of prose. Exit code is unchanged. Deserialize instead of regexing stdout.
 
 Still gated (no trigger fired): framework-export profiles for Webflow/Bootstrap-class layouts; Phase 4 candidates in `tasks/arc.md` backlog.
 

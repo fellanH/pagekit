@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::extract::collect_html_files;
+use crate::report::{JsonFinding, Report};
 use anyhow::{Context, Result};
 use scraper::{ElementRef, Html, Selector};
 use std::collections::BTreeMap;
@@ -22,8 +23,9 @@ const GENERIC_LINK_TEXTS: &[&str] = &[
 /// Run `pagekit a11y`. Subset of WCAG checks doable without rendering.
 /// Color contrast, focus-visible styles, and dynamic ARIA semantics
 /// are explicitly NOT covered. Pass means "cheap checks pass", not
-/// "WCAG compliant".
-pub fn run_a11y(root: &Path, config: &Config) -> Result<i32> {
+/// "WCAG compliant". With `json=true`, emits findings as a structured
+/// [`Report`] instead of prose; the exit code is unchanged.
+pub fn run_a11y(root: &Path, config: &Config, json: bool) -> Result<i32> {
     let target_dir = root.join(&config.core.target_dir);
     let scan_root = if target_dir.is_dir() {
         target_dir
@@ -50,6 +52,28 @@ pub fn run_a11y(root: &Path, config: &Config) -> Result<i32> {
         check_form_labels(&url, &doc, &mut findings);
         check_empty_interactives(&url, &doc, &mut findings);
         check_link_text(&url, &doc, &mut findings);
+    }
+
+    // JSON output: a11y findings are violations (all severity "error");
+    // any finding flips status to fail. Exit code matches prose mode.
+    if json {
+        let jf: Vec<JsonFinding> = findings
+            .iter()
+            .map(|f| JsonFinding {
+                rule: f.rule.to_string(),
+                severity: "error".to_string(),
+                page: Some(f.page.clone()),
+                message: f.message.clone(),
+            })
+            .collect();
+        let status = if jf.is_empty() { "pass" } else { "fail" };
+        Report {
+            check: "a11y",
+            status,
+            findings: jf,
+        }
+        .print()?;
+        return Ok(if status == "pass" { 0 } else { 2 });
     }
 
     if findings.is_empty() {

@@ -19,7 +19,12 @@ const DEFAULT_ATTRS: &[&str] = &["href", "src"];
 /// explicit `[transforms].path_root`; `normalize-paths` defaults
 /// `path_root="/"` when invoked, because the user opted in by running
 /// the command. Configured `path_root` still overrides the default.
-pub fn normalize_paths(root: &Path, config: &Config) -> Result<usize> {
+///
+/// Safe-by-default like the other bulk mutators (`apply`, `mv-asset`,
+/// `rename-assets`): with `write=false` it reports what would change
+/// without touching disk. Returns the number of pages modified (or that
+/// would be modified in dry-run).
+pub fn normalize_paths(root: &Path, config: &Config, write: bool) -> Result<usize> {
     let target_dir = root.join(&config.core.target_dir);
     let scan_root = if target_dir.is_dir() {
         target_dir
@@ -64,13 +69,21 @@ pub fn normalize_paths(root: &Path, config: &Config) -> Result<usize> {
             .transform("", &content, path, root)
             .with_context(|| format!("rewriting {}", path.display()))?;
         if new_content != content {
-            fs::write(path, &new_content).with_context(|| format!("writing {}", path.display()))?;
+            if write {
+                fs::write(path, &new_content)
+                    .with_context(|| format!("writing {}", path.display()))?;
+            }
             modified += 1;
         }
     }
 
+    let (mode, verb) = if write {
+        ("write", "changed")
+    } else {
+        ("dry-run", "would change")
+    };
     println!(
-        "pagekit: normalized {modified} of {} page(s)",
+        "pagekit: normalize-paths ({mode}): {modified} of {} page(s) {verb}",
         html_files.len()
     );
     Ok(modified)

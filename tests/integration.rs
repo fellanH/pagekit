@@ -79,6 +79,15 @@ fn run_normalize_paths(dir: &Path) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
         .arg(dir.to_str().unwrap())
         .arg("normalize-paths")
+        .arg("--write")
+        .output()
+        .expect("failed to run pagekit")
+}
+
+fn run_normalize_paths_dry(dir: &Path) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
+        .arg(dir.to_str().unwrap())
+        .arg("normalize-paths")
         .output()
         .expect("failed to run pagekit")
 }
@@ -103,6 +112,15 @@ fn run_a11y(dir: &Path) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
         .arg(dir.to_str().unwrap())
         .arg("a11y")
+        .output()
+        .expect("failed to run pagekit")
+}
+
+fn run_check_json(dir: &Path, cmd: &str) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_pagekit"))
+        .arg(dir.to_str().unwrap())
+        .arg(cmd)
+        .arg("--json")
         .output()
         .expect("failed to run pagekit")
 }
@@ -1169,6 +1187,33 @@ fn normalize_paths_skips_externals() {
     assert!(after.contains(r#"href="../sibling.html""#));
 }
 
+#[test]
+fn normalize_paths_dry_run_does_not_write() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    let html = r#"<html><body><a href="/x">x</a></body></html>"#;
+    fs::create_dir_all(root.join("foo")).unwrap();
+    fs::write(root.join("foo/index.html"), html).unwrap();
+
+    let output = run_normalize_paths_dry(root);
+    // Pending changes in dry-run gate at exit 2 (matches apply/mv-asset).
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "dry-run with pending changes must exit 2"
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("dry-run"),
+        "must announce dry-run:\n{stdout}"
+    );
+
+    // File must be untouched.
+    let after = fs::read_to_string(root.join("foo/index.html")).unwrap();
+    assert_eq!(after, html, "dry-run must not modify the file");
+}
+
 // --- links ---
 
 #[test]
@@ -2031,4 +2076,108 @@ fn preflight_aggregates_failures() {
         "links should appear as FAIL in summary:\n{stdout}"
     );
     assert!(stdout.contains("check(s) failing"));
+}
+
+// --- JSON output (--json) ---
+
+#[test]
+fn links_json_clean_site_reports_pass() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(root.join("a.html"), "<html><body></body></html>").unwrap();
+    fs::write(
+        root.join("b.html"),
+        r#"<html><body><a href="a.html">A</a></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_check_json(root, "links");
+    assert!(output.status.success(), "clean site must exit 0");
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .expect("links --json must emit valid JSON on stdout");
+    assert_eq!(v["check"], "links");
+    assert_eq!(v["status"], "pass");
+    assert_eq!(v["findings"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn links_json_reports_broken_internal() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<html><body><a href="/missing-page">x</a></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_check_json(root, "links");
+    assert_eq!(output.status.code(), Some(2), "findings must exit 2");
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["check"], "links");
+    assert_eq!(v["status"], "fail");
+    let findings = v["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule"] == "broken-internal-link" && f["severity"] == "error"),
+        "expected a broken-internal-link finding: {v}"
+    );
+}
+
+#[test]
+fn seo_json_reports_error_finding() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    // Missing <title> is an error-severity finding.
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html lang="en"><head>
+<meta name="description" content="Demo without title for the test suite test fixture data.">
+<link rel="canonical" href="https://example.com/a">
+</head><body></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_check_json(root, "seo");
+    assert_eq!(output.status.code(), Some(2), "errors must exit 2");
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["check"], "seo");
+    assert_eq!(v["status"], "fail");
+    assert!(
+        v["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["rule"] == "title" && f["severity"] == "error"),
+        "expected a title error finding: {v}"
+    );
+}
+
+#[test]
+fn a11y_json_reports_violation() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::write(
+        root.join("a.html"),
+        r#"<!DOCTYPE html><html lang="en"><body><img src="/no-alt.png"></body></html>"#,
+    )
+    .unwrap();
+
+    let output = run_check_json(root, "a11y");
+    assert_eq!(output.status.code(), Some(2), "violations must exit 2");
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(v["check"], "a11y");
+    assert_eq!(v["status"], "fail");
+    assert!(
+        v["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["rule"] == "img-alt"),
+        "expected an img-alt finding: {v}"
+    );
 }

@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::extract::collect_html_files;
+use crate::report::{JsonFinding, Report};
 use anyhow::{Context, Result};
 use scraper::{Html, Selector};
 use std::collections::BTreeMap;
@@ -17,8 +18,10 @@ const DESCRIPTION_MIN: usize = 50;
 const DESCRIPTION_MAX: usize = 160;
 
 /// Run `pagekit seo`. Returns the process exit code: 0 = no errors
-/// (warns are OK), 2 = at least one error.
-pub fn run_seo(root: &Path, config: &Config) -> Result<i32> {
+/// (warns are OK), 2 = at least one error. With `json=true`, emits
+/// findings as a structured [`Report`] instead of prose; the exit code
+/// is unchanged (warns are reported but do not flip status to fail).
+pub fn run_seo(root: &Path, config: &Config, json: bool) -> Result<i32> {
     let target_dir = root.join(&config.core.target_dir);
     let scan_root = if target_dir.is_dir() {
         target_dir
@@ -50,6 +53,32 @@ pub fn run_seo(root: &Path, config: &Config) -> Result<i32> {
     rule_hreflang(&metas, &mut findings);
     rule_json_ld(&metas, &mut findings);
     rule_heading_hierarchy(&metas, &mut findings);
+
+    // JSON output: emit all findings (errors + warns); status reflects
+    // errors only, matching prose-mode exit semantics.
+    if json {
+        let had_errors = findings.iter().any(|f| f.severity == Severity::Error);
+        let jf: Vec<JsonFinding> = findings
+            .iter()
+            .map(|f| JsonFinding {
+                rule: f.rule.to_string(),
+                severity: match f.severity {
+                    Severity::Error => "error",
+                    Severity::Warn => "warn",
+                }
+                .to_string(),
+                page: f.page.clone(),
+                message: f.message.clone(),
+            })
+            .collect();
+        Report {
+            check: "seo",
+            status: if had_errors { "fail" } else { "pass" },
+            findings: jf,
+        }
+        .print()?;
+        return Ok(if had_errors { 2 } else { 0 });
+    }
 
     if findings.is_empty() {
         println!("pagekit: SEO checks pass on {} page(s)", html_files.len());

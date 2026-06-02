@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::extract::collect_html_files;
+use crate::report::{JsonFinding, Report};
 use anyhow::{Context, Result};
 use scraper::{Html, Selector};
 use std::collections::{BTreeMap, BTreeSet};
@@ -9,8 +10,9 @@ use walkdir::WalkDir;
 
 /// Run `pagekit links`. Returns the process exit code: 0 = clean,
 /// 2 = issues found. IO/parse errors bubble via `Result` (caller
-/// surfaces exit 1).
-pub fn run_links(root: &Path, config: &Config) -> Result<i32> {
+/// surfaces exit 1). With `json=true`, emits findings as a structured
+/// [`Report`] instead of prose; the exit code is unchanged.
+pub fn run_links(root: &Path, config: &Config, json: bool) -> Result<i32> {
     let target_dir = root.join(&config.core.target_dir);
     let scan_root = if target_dir.is_dir() {
         target_dir
@@ -213,6 +215,45 @@ pub fn run_links(root: &Path, config: &Config) -> Result<i32> {
         })
         .cloned()
         .collect();
+
+    // JSON output: emit a structured report and return. Exit code
+    // matches prose mode (2 if any finding, else 0).
+    if json {
+        let mut findings: Vec<JsonFinding> = Vec::new();
+        for (page, target) in &broken_internal {
+            findings.push(JsonFinding {
+                rule: "broken-internal-link".to_string(),
+                severity: "error".to_string(),
+                page: Some(page.clone()),
+                message: format!("{target} (404)"),
+            });
+        }
+        for (page, detail) in &broken_anchors {
+            findings.push(JsonFinding {
+                rule: "broken-anchor".to_string(),
+                severity: "error".to_string(),
+                page: Some(page.clone()),
+                message: detail.clone(),
+            });
+        }
+        for p in &orphans {
+            let rel = p.strip_prefix(&scan_root).unwrap_or(p);
+            findings.push(JsonFinding {
+                rule: "orphan-asset".to_string(),
+                severity: "warn".to_string(),
+                page: None,
+                message: format!("{} (no references)", rel.display()),
+            });
+        }
+        let status = if findings.is_empty() { "pass" } else { "fail" };
+        Report {
+            check: "links",
+            status,
+            findings,
+        }
+        .print()?;
+        return Ok(if status == "pass" { 0 } else { 2 });
+    }
 
     // Render report.
     let mut had_issues = false;

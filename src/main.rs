@@ -12,6 +12,7 @@ mod mv_asset;
 mod normalize;
 mod preflight;
 mod rename_assets;
+mod report;
 mod seo;
 mod show;
 mod transforms;
@@ -94,22 +95,38 @@ enum Cmd {
     },
     /// Rewrite root-absolute paths (href/src) in every page to be
     /// relative to each page's depth. Idempotent. Defaults
-    /// `path_root="/"` when no `[transforms]` config is present —
-    /// running the command is the opt-in.
-    NormalizePaths,
+    /// `path_root="/"` when no `[transforms]` config is present.
+    /// Safe-by-default: runs as a dry-run unless --write is passed.
+    NormalizePaths {
+        /// Actually write the rewritten pages to disk (default is dry-run).
+        #[arg(long)]
+        write: bool,
+    },
     /// Find broken internal links, broken anchors, and orphan assets.
     /// External URLs (http://, mailto:, tel:) are NOT fetched. Exit 0
     /// = clean, exit 2 = issues found.
-    Links,
+    Links {
+        /// Emit findings as JSON instead of human-readable prose.
+        #[arg(long)]
+        json: bool,
+    },
     /// SEO health check: titles, descriptions, canonicals, OG/Twitter,
     /// hreflang, JSON-LD validity, heading hierarchy. Exit 0 = no
     /// errors (warns are OK), exit 2 = at least one error.
-    Seo,
+    Seo {
+        /// Emit findings as JSON instead of human-readable prose.
+        #[arg(long)]
+        json: bool,
+    },
     /// Accessibility check: grep-able WCAG subset (img alts, form
     /// labels, html lang attr, empty/generic links). Color contrast,
     /// focus styles, and dynamic ARIA need rendering and are NOT
     /// covered. Pass means "cheap checks pass", not "WCAG compliant".
-    A11y,
+    A11y {
+        /// Emit findings as JSON instead of human-readable prose.
+        #[arg(long)]
+        json: bool,
+    },
     /// Asset reference graph (HTML hrefs/srcs/srcsets + CSS url()
     /// references). TSV manifest covering hash, byte count, MIME type,
     /// referencing pages and stylesheets, and orphan flag for
@@ -230,7 +247,7 @@ fn main() -> Result<()> {
                         ),
                     }
                 }
-                std::process::exit(1);
+                std::process::exit(2);
             }
         }
         Cmd::Init { file } => {
@@ -252,29 +269,33 @@ fn main() -> Result<()> {
         Cmd::Doctor => {
             let issues = fragments::doctor::run_doctor(&root, &config.core)?;
             if issues > 0 {
-                std::process::exit(1);
+                std::process::exit(2);
             }
         }
         Cmd::Inventory { save } => {
             inventory::run_inventory(&root, &config, save)?;
         }
-        Cmd::NormalizePaths => {
-            normalize::normalize_paths(&root, &config)?;
+        Cmd::NormalizePaths { write } => {
+            let modified = normalize::normalize_paths(&root, &config, write)?;
+            if !write && modified > 0 {
+                // Dry-run with pending changes: exit 2 so callers can gate.
+                std::process::exit(2);
+            }
         }
-        Cmd::Links => {
-            let code = links::run_links(&root, &config)?;
+        Cmd::Links { json } => {
+            let code = links::run_links(&root, &config, json)?;
             if code != 0 {
                 std::process::exit(code);
             }
         }
-        Cmd::Seo => {
-            let code = seo::run_seo(&root, &config)?;
+        Cmd::Seo { json } => {
+            let code = seo::run_seo(&root, &config, json)?;
             if code != 0 {
                 std::process::exit(code);
             }
         }
-        Cmd::A11y => {
-            let code = a11y::run_a11y(&root, &config)?;
+        Cmd::A11y { json } => {
+            let code = a11y::run_a11y(&root, &config, json)?;
             if code != 0 {
                 std::process::exit(code);
             }

@@ -42,7 +42,7 @@ pub fn run_preflight(root: &Path, config: &Config) -> Result<i32> {
 
     // links
     println!("== links ==");
-    let links_outcome = match links::run_links(root, config) {
+    let links_outcome = match links::run_links(root, config, false) {
         Ok(0) => CheckOutcome::Pass,
         Ok(_) => CheckOutcome::Fail("broken links or orphans".into()),
         Err(e) => CheckOutcome::Error(e.to_string()),
@@ -52,7 +52,7 @@ pub fn run_preflight(root: &Path, config: &Config) -> Result<i32> {
 
     // seo
     println!("== seo ==");
-    let seo_outcome = match seo::run_seo(root, config) {
+    let seo_outcome = match seo::run_seo(root, config, false) {
         Ok(0) => CheckOutcome::Pass,
         Ok(_) => CheckOutcome::Fail("SEO errors".into()),
         Err(e) => CheckOutcome::Error(e.to_string()),
@@ -62,7 +62,7 @@ pub fn run_preflight(root: &Path, config: &Config) -> Result<i32> {
 
     // a11y
     println!("== a11y ==");
-    let a11y_outcome = match a11y::run_a11y(root, config) {
+    let a11y_outcome = match a11y::run_a11y(root, config, false) {
         Ok(0) => CheckOutcome::Pass,
         Ok(_) => CheckOutcome::Fail("a11y issues".into()),
         Err(e) => CheckOutcome::Error(e.to_string()),
