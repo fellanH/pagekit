@@ -181,6 +181,11 @@ pub fn run_links(root: &Path, config: &Config, json: bool) -> Result<i32> {
         if p.extension().map(|x| x == "md").unwrap_or(false) {
             continue;
         }
+        // Skip source/build tooling (build.sh, *.py, Makefile, …) — never
+        // deployable web assets, so an "orphan" flag is a false positive.
+        if is_non_web_deployable(p) {
+            continue;
+        }
         // Skip dotfiles by basename (.gitignore, .DS_Store, etc.).
         if p.file_name()
             .and_then(|n| n.to_str())
@@ -493,6 +498,33 @@ pub(crate) fn is_meta_image_key(key: &str) -> bool {
     )
 }
 
+/// True for source/build/tooling files that are never deployable web
+/// assets — shell/script sources, build manifests, Makefile-class files.
+/// Flagging these as orphans is a false positive on repos where
+/// `target_dir` sweeps source alongside pages (e.g. `target_dir="."`):
+/// you'd never "remove the orphan" `build.sh`. Symmetric with the
+/// platform-files whitelist but matched by extension class. Shared by the
+/// orphan passes in `links` and `assets`.
+pub(crate) fn is_non_web_deployable(path: &Path) -> bool {
+    const NON_WEB_EXTS: &[&str] = &[
+        "sh", "bash", "zsh", "fish", // shell scripts
+        "py", "rb", "pl", "lua", // scripting languages
+        "toml", "lock", "mk", "ninja", // build/manifest files
+        "bat", "cmd", "ps1", // windows scripts
+    ];
+    if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+        if NON_WEB_EXTS.contains(&ext.to_ascii_lowercase().as_str()) {
+            return true;
+        }
+    }
+    // Extensionless build tooling, matched by basename.
+    const NON_WEB_NAMES: &[&str] = &["Makefile", "Dockerfile", "Rakefile", "Gemfile", "Procfile"];
+    matches!(
+        path.file_name().and_then(|s| s.to_str()),
+        Some(name) if NON_WEB_NAMES.contains(&name)
+    )
+}
+
 /// Parse a `srcset` attribute into its URL list. Each comma-separated
 /// entry's first whitespace-separated token is the URL; the rest
 /// (`1x`, `500w`, etc.) is the descriptor and ignored here.
@@ -539,6 +571,28 @@ mod tests {
                 assert_eq!(anchor.as_deref(), Some("section"));
             }
             _ => panic!("expected Internal"),
+        }
+    }
+
+    #[test]
+    fn non_web_deployable_classifies_source_and_build_files() {
+        for f in [
+            "build.sh",
+            "scripts/inject-meta.py",
+            "lib.rb",
+            "Makefile",
+            "Cargo.toml",
+        ] {
+            assert!(
+                is_non_web_deployable(Path::new(f)),
+                "{f} should be non-web-deployable"
+            );
+        }
+        for f in ["site.css", "logo.svg", "app.js", "photo.png", "favicon.ico"] {
+            assert!(
+                !is_non_web_deployable(Path::new(f)),
+                "{f} is a real web asset"
+            );
         }
     }
 

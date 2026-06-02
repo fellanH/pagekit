@@ -127,6 +127,11 @@ pub fn run_assets(root: &Path, config: &Config, save: Option<PathBuf>) -> Result
         if p.extension().map(|x| x == "md").unwrap_or(false) {
             continue;
         }
+        // Skip source/build tooling (build.sh, *.py, Makefile, …) — never
+        // deployable web assets, so an "orphan" flag is a false positive.
+        if crate::links::is_non_web_deployable(p) {
+            continue;
+        }
         if p.file_name()
             .and_then(|n| n.to_str())
             .map(|s| s.starts_with('.'))

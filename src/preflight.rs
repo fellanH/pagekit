@@ -132,9 +132,35 @@ fn run_sync_check(
             if issues.is_empty() {
                 CheckOutcome::Pass
             } else {
+                // Print which pages are stale/malformed under the section,
+                // mirroring standalone `pagekit check`. Without this the
+                // `== check ==` section is blank on failure and an agent
+                // gating go-live on `preflight` can't see what to re-sync.
+                for issue in &issues {
+                    println!("  {}", format_check_issue(issue));
+                }
                 CheckOutcome::Fail(format!("{} stale or malformed", issues.len()))
             }
         }
         Err(e) => CheckOutcome::Error(e.to_string()),
+    }
+}
+
+/// Format one sync `CheckIssue` as a single human-readable line. Matches
+/// the wording of standalone `pagekit check` so the two surfaces agree.
+fn format_check_issue(issue: &fragments::CheckIssue) -> String {
+    match issue {
+        fragments::CheckIssue::Stale(p) => format!("stale: {}", p.display()),
+        fragments::CheckIssue::UnpairedOpen { path, name } => {
+            format!("unpaired open marker '{}' in {}", name, path.display())
+        }
+        fragments::CheckIssue::UnpairedClose { path, name } => {
+            format!("unpaired close marker '{}' in {}", name, path.display())
+        }
+        fragments::CheckIssue::DuplicatePair { path, name } => format!(
+            "duplicate marker pair '{}' in {} (only first pair gets synced)",
+            name,
+            path.display()
+        ),
     }
 }

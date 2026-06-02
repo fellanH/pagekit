@@ -1390,6 +1390,30 @@ fn links_skips_llms_txt_in_orphan_check() {
 }
 
 #[test]
+fn links_skips_non_web_source_files_in_orphan_check() {
+    // CAND-B regression: build/source tooling swept when target_dir="."
+    // must NOT be flagged orphan — you'd never "remove the orphan"
+    // build.sh. Surfaced dogfooding against stormfors/knowledge-base
+    // (build.sh, scripts/inject-meta.py falsely flagged).
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::create_dir_all(root.join("scripts")).unwrap();
+    fs::write(root.join("build.sh"), "#!/bin/sh\necho build").unwrap();
+    fs::write(root.join("scripts/inject-meta.py"), "print('x')").unwrap();
+    fs::write(root.join("Makefile"), "all:\n\techo hi").unwrap();
+    fs::write(root.join("a.html"), "<html><body></body></html>").unwrap();
+    fs::write(root.join("b.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_links(root);
+    assert!(
+        output.status.success(),
+        "source/build files must NOT be flagged orphan:\nstdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
 fn links_counts_meta_social_card_images() {
     // og:image / twitter:image point at real asset files but live in
     // <meta content="…">, not href/src. They must count toward the
@@ -1986,6 +2010,28 @@ fn assets_flags_true_orphan() {
 }
 
 #[test]
+fn assets_skips_non_web_source_files() {
+    // CAND-B regression (assets side): source/build tooling must not
+    // appear at all in the asset manifest — neither as an orphan nor as
+    // a tracked asset. Symmetric with the `links` orphan-pass skip.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    fs::create_dir_all(root.join("scripts")).unwrap();
+    fs::write(root.join("build.sh"), "#!/bin/sh\necho build").unwrap();
+    fs::write(root.join("scripts/inject-meta.py"), "print('x')").unwrap();
+    fs::write(root.join("a.html"), "<html><body></body></html>").unwrap();
+
+    let output = run_assets(root);
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        !stdout.contains("build.sh") && !stdout.contains("inject-meta.py"),
+        "source/build files must NOT appear in the asset manifest:\n{stdout}"
+    );
+}
+
+#[test]
 fn assets_skips_data_urls() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
@@ -2164,6 +2210,33 @@ fn preflight_aggregates_failures() {
         "links should appear as FAIL in summary:\n{stdout}"
     );
     assert!(stdout.contains("check(s) failing"));
+}
+
+#[test]
+fn preflight_lists_stale_pages_under_check() {
+    // CAND-A regression: preflight's `== check ==` section must name WHICH
+    // pages are stale, not just a count — an agent gating go-live on
+    // preflight needs to know what to re-sync. Surfaced dogfooding against
+    // stormfors/knowledge-base (27 stale pages, blank check section).
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    setup_site(
+        root,
+        &[("nav.html", "<nav>Fresh</nav>")],
+        &[(
+            "stale-page.html",
+            "<html><body><!-- fragment:nav --><nav>Old</nav><!-- /fragment:nav --></body></html>",
+        )],
+    );
+
+    let output = run_preflight(root);
+    assert_eq!(output.status.code(), Some(2), "stale site must exit 2");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("stale-page.html"),
+        "preflight check section must name the stale page:\n{stdout}"
+    );
 }
 
 // --- JSON output (--json) ---
