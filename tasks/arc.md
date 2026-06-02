@@ -1,6 +1,6 @@
 # pagekit
 
-Binary ships. Sprints 4-7 closed; agent-tooling trajectory complete. Test suite green: 64 integration + 48 unit, clippy + fmt clean. Agent-consumable substrate sprint shipped (`--json` on links/seo/a11y, uniform exit codes, normalize-paths safe-by-default).
+Binary ships. Sprints 4-7 closed; agent-tooling trajectory complete. Test suite green: 70 integration + 49 unit, clippy + fmt clean. Agent-consumable substrate sprint shipped (`--json` on links/seo/a11y, uniform exit codes, normalize-paths safe-by-default). Dogfood fix-candidates CAND-A + CAND-B landed (`4186730`).
 
 ## Active arc
 
@@ -39,13 +39,13 @@ Phase 4 candidates (image dims, semantic variant naming, framework profiles, exp
 - **Migration ergonomics for `--split-variants`** — fresh-run only today; a re-run after plain `extract` is silently no-op'd. **Trigger:** first time a consumer asks for it.
 - **Broken-link check on `<meta>` social-card images** — `links`/`assets` now COUNT `og:image`/`twitter:image` content toward the reference graph (orphan-set only; commit `cd9b898`), but a meta image pointing at a *missing* file is not yet flagged broken. Absolute OG URLs are the spec norm (skipped as External), so only relative/root-absolute would be checked. **Trigger:** a consumer ships a broken social card via a relative og:image and wants it caught. See `todo/2026-06-02-dogfood-weknowaeo.md` (BUG-3).
 
-### Dogfood fix-candidates from knowledge-base audit (2026-06-02) — READY, cheap, not yet implemented
+### Dogfood fix-candidates from knowledge-base audit (2026-06-02)
 
 Surfaced running the audit against `stormfors/knowledge-base`. Full detail + root cause in
-[`todo/2026-06-02-dogfood-knowledge-base.md`](../todo/2026-06-02-dogfood-knowledge-base.md). Next seat: implement A + B (both cheap, both my scope).
-- **CAND-A — `preflight` swallows `check`'s stale-file list.** `run_sync_check` (`src/preflight.rs:130-136`) keeps only `issues.len()`; the `== check ==` section is blank on failure while standalone `check` lists every stale page. Print each `issues` entry under the section + integ test. ~5 lines.
-- **CAND-B — orphan-asset detection flags non-web build scripts** (`.sh`/`.py`) when `target_dir="."`. Skip non-web-deployable extensions in `links.rs` + `assets.rs` orphan checks (shared list). + test.
-- **CAND-C (low-confidence, defer)** — `_`-prefixed scaffolding templates SEO-audited as real pages. Blanket `_`-skip risks over-reach; wait for a consumer complaint.
+[`todo/2026-06-02-dogfood-knowledge-base.md`](../todo/2026-06-02-dogfood-knowledge-base.md).
+- **CAND-A — `preflight` swallows `check`'s stale-file list.** ✅ DONE (`4186730`). `run_sync_check` now prints each `CheckIssue` under `== check ==` via `format_check_issue`, mirroring standalone `check`. + integ test.
+- **CAND-B — orphan-asset detection flags non-web build scripts** (`.sh`/`.py`/Makefile) when `target_dir="."`. ✅ DONE (`4186730`). Shared `links::is_non_web_deployable()` (extension + basename class), used by both `links` + `assets` orphan passes. + 1 unit + 2 integ tests.
+- **CAND-C (low-confidence, defer)** — `_`-prefixed scaffolding templates SEO-audited as real pages. Blanket `_`-skip risks over-reach; wait for a consumer complaint. STILL DEFERRED.
 
 ## Real bugs surfaced (not pagekit's responsibility)
 

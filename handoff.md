@@ -7,6 +7,23 @@ _Updated 2026-06-02 (felix). Boot order: this file → `AGENTS.md` → `tasks/ar
 Feature-complete, **no active sprint, no open blockers**. Build green, binary shipped to
 `~/.local/bin/pagekit` (v0.1.0, includes this sprint's surface).
 
+> ⚠️ **PATH note:** the `pagekit` first on PATH is `~/Library/Application Support/cargo/bin/pagekit`
+> (cargo bin precedes `~/.local/bin`). Ship to **both** after a build, or `which pagekit` runs stale.
+> This session shipped to both.
+
+## Latest session — CAND-A + CAND-B landed (2026-06-02, `4186730`)
+
+The two dogfood fix-candidates from the knowledge-base audit are **done, shipped, verified**:
+- **CAND-A** — `preflight`'s `== check ==` section now lists every stale/malformed page (not just a
+  count). `run_sync_check` (`src/preflight.rs`) prints each `CheckIssue` via a `format_check_issue`
+  helper mirroring standalone `check`. + integ test `preflight_lists_stale_pages_under_check`.
+- **CAND-B** — orphan detection in `links`+`assets` skips non-web-deployable source/build files
+  (`build.sh`/`*.py`/`Makefile`/`*.toml`…) via shared `links::is_non_web_deployable()` (extension +
+  basename class, symmetric with `PLATFORM_FILES`). + 1 unit + 2 integ tests.
+- Tests now **49 unit + 70 integ**, clippy + fmt clean. Verified live against
+  `stormfors/knowledge-base`: build scripts gone from orphans; preflight names all stale pages.
+- **CAND-C still deferred** (low-confidence `_`-prefix SEO skip) — wait for a consumer complaint.
+
 Latest sprint — agent-consumable substrate (`2bab3de` + `1b67de8`):
 - **#1 `--json`** on `links`/`seo`/`a11y` — envelope `{check,status,findings:[{rule,severity,page?,message}]}`
   via `src/report.rs`. Agents deserialize instead of regexing. Exit code unchanged. (inventory/assets
@@ -43,29 +60,26 @@ twitter:image content>` now counts toward the reference graph (was a false orpha
 Real site findings (broken privacy/terms Next export → 404 titles, missing canonicals, etc.) are **weknowaeo's**,
 not pagekit's — captured in `todo/2026-06-02-dogfood-weknowaeo.md` for relay.
 
-## Dogfood #2 — knowledge-base audit (2026-06-02, audit-only, fixes deferred to you)
+## Dogfood #2 — knowledge-base audit (2026-06-02) — FIXES LANDED
 
-Ran the read-only audit against `~/omni/companies/stormfors/knowledge-base` (31-page hand-authored KB;
-different shape from the we-know-aeo Next export). No crashes. Surfaced **2 cheap tool fix-candidates,
-NOT yet implemented** (Felix scoped this run to audit+report+rotate, not fix):
-- **CAND-A:** `preflight` discards `check`'s stale-file list (`src/preflight.rs:130-136` keeps only the
-  count) — `== check ==` blank on failure while standalone `check` lists all stale pages. ~5-line fix + test.
-- **CAND-B:** orphan-asset detection flags non-web build scripts (`.sh`/`.py`) when `target_dir="."`.
-  Skip non-web extensions in `links.rs`+`assets.rs`. + test.
-- CAND-C (defer, low-confidence): `_`-prefixed templates SEO-audited as pages.
+Audit ran against `~/omni/companies/stormfors/knowledge-base` (31-page hand-authored KB). Surfaced two
+fix-candidates; **CAND-A + CAND-B are now implemented** (see "Latest session" above, `4186730`).
+Full original detail + root cause: `todo/2026-06-02-dogfood-knowledge-base.md`.
 
-Full detail + root cause: `todo/2026-06-02-dogfood-knowledge-base.md`; also in `tasks/arc.md` backlog.
-**Next seat: implement CAND-A + CAND-B** (both cheap, both pagekit's scope). Site bugs (27 stale KB pages
-needing `pagekit sync`, etc.) are the knowledge-base seat's — relayed via hub, do not absorb.
+**Site bugs are NOT pagekit's** — the KB has 27 stale pages needing `pagekit sync` (real content drift
+the tool caught correctly). Owner: the knowledge-base seat, relay via hub, do not absorb.
 
 ## Then
 
-Pick up CAND-A + CAND-B above (ready, cheap). Otherwise `tasks/arc.md` backlog stays trigger-gated —
-don't pull gated items speculatively. If idle, do baton/doc hygiene or wait for a consumer-driven trigger.
+CAND-A + CAND-B done. `tasks/arc.md` backlog is now all trigger-gated — **don't pull gated items
+speculatively.** If idle: baton/doc hygiene, or wait for a consumer-driven trigger. CAND-C (low-confidence
+`_`-prefix SEO skip) stays deferred until a consumer complains. Live consumer signal would unblock the
+trigger-gated items (image-dims, expected_origin, framework profiles, meta-image broken-link BUG-3).
 
 ## Recent commits this session
 
+- `4186730` fix: CAND-A preflight stale-list + CAND-B skip non-web source files in orphan checks
+
+Prior sessions:
 - `1b67de8` chore: adopt fragments-sync package name (rename landed upstream)
 - `2bab3de` feat: --json output, uniform exit codes, normalize-paths safe-by-default
-- `a5c0b67` docs: record fix commit hash in handoff baton
-- `75fe017` fix: clippy + fmt on agent-edit tooling
