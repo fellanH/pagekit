@@ -11,6 +11,20 @@ Feature-complete, **no active sprint, no open blockers**. Build green, binary sh
 > (cargo bin precedes `~/.local/bin`). Ship to **both** after a build, or `which pagekit` runs stale.
 > This session shipped to both.
 
+## Helm platform relay (2026-06-03) — parked, revenue-system owns
+
+Felix is standing up **helm** — a hosted enterprise website-management PLATFORM, the main
+revenue bet — that consumes the suite as connectors (clone-a-website, freedom-cms, migrate,
+clean-clone now; forms + dns/hosting/domain later). pagekit/fragments sit a layer BELOW (the
+connectors already compose them), so pagekit is **not** a platform connector. Felix routed all
+shape decisions to **revenue-system**; relayed our suite-internals read + proposed layering
+(thin-orchestrator over connector-as-jobs, NOT monorepo-absorb) → `~/.omni/relay-inbox/revenue-system/`.
+Verdict back: **HELD on Felix shape-validation + dec-dd3d6d62.** Nothing for pagekit to poll.
+**Standing offer on record:** if revenue-system goes spec-first after Felix validates, pagekit
+gets dispatched to draft the **connector-orchestration / architecture** section (deepest
+suite-composition context). Until that dispatch fires = parked. (Note: `claude-platform` +
+`connector-architecture` relay-inboxes already exist — flagged to revenue-system to reconcile.)
+
 ## Latest session — extract fidelity fix (2026-06-03, tas-0ffcaf88, `e69edc4`)
 
 Class-A fidelity defect (finder: migrate seat, FIDELITY.md asedo #1): `pagekit extract` wrote
