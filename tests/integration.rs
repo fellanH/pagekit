@@ -389,6 +389,63 @@ fn extract_creates_fragment_file() {
     assert!(frag.contains("<a href=\"/\">Home</a>"));
 }
 
+/// Regression (tas-0ffcaf88): a shared block whose dominant variant is lifted
+/// from a deep page (`a/b/index.html`, depth two) must have its *relative*
+/// asset refs re-relativized to the fragment file's own depth (`_fragments/`,
+/// depth one): `../../_assets/…` becomes `../_assets/…`. Otherwise the
+/// standalone fragment resolves its assets one directory too high.
+/// Root-absolute (`/…`) refs are left untouched (correct from any depth, and
+/// the sync hook's job).
+#[test]
+fn extract_relativizes_fragment_asset_refs_to_fragment_depth() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+
+    // Two depth-2 pages share an identical navbar authored with depth-2
+    // (`../../`) relative refs + one root-absolute ref.
+    let nav = "<nav class=\"navbar\">\
+<a href=\"../../index.html\"><img src=\"../../_assets/logo.png\"></a>\
+<link href=\"/style.css\"></nav>";
+    fs::create_dir_all(root.join("a/b")).unwrap();
+    fs::create_dir_all(root.join("a/c")).unwrap();
+    for p in ["a/b/index.html", "a/c/index.html"] {
+        fs::write(
+            root.join(p),
+            format!("<!DOCTYPE html><html><body>{nav}<main>{p}</main></body></html>"),
+        )
+        .unwrap();
+    }
+
+    let output = run_extract(root);
+    assert!(output.status.success(), "extract failed: {output:?}");
+
+    let frag = fs::read_to_string(root.join("_fragments/navbar.html")).unwrap();
+    assert!(
+        frag.contains("src=\"../_assets/logo.png\""),
+        "relative img src should rebase depth-2 -> fragment depth-1, got:\n{frag}"
+    );
+    assert!(
+        frag.contains("href=\"../index.html\""),
+        "relative anchor href should rebase to fragment depth, got:\n{frag}"
+    );
+    assert!(
+        !frag.contains("../../_assets/"),
+        "source-page depth-2 prefix must not survive in the fragment:\n{frag}"
+    );
+    assert!(
+        frag.contains("href=\"/style.css\""),
+        "root-absolute refs must be left untouched, got:\n{frag}"
+    );
+
+    // The served page keeps its own correct depth-2 refs (marker insertion
+    // only; no rewrite of in-page content).
+    let page = fs::read_to_string(root.join("a/b/index.html")).unwrap();
+    assert!(
+        page.contains("src=\"../../_assets/logo.png\""),
+        "in-page content must be untouched by extract, got:\n{page}"
+    );
+}
+
 #[test]
 fn extract_idempotent_does_not_double_wrap() {
     let tmp = TempDir::new().unwrap();
