@@ -1,6 +1,6 @@
 # pagekit
 
-Binary ships. Sprints 4-7 closed; agent-tooling trajectory complete. Test suite green: 70 integration + 49 unit, clippy + fmt clean. Agent-consumable substrate sprint shipped (`--json` on links/seo/a11y, uniform exit codes, normalize-paths safe-by-default). Dogfood fix-candidates CAND-A + CAND-B landed (`4186730`).
+Binary ships. Sprints 4-7 closed; agent-tooling trajectory complete. Test suite green: **71 integration + 49 unit**, clippy + fmt clean. Agent-consumable substrate sprint shipped (`--json` on links/seo/a11y, uniform exit codes, normalize-paths safe-by-default). Dogfood fix-candidates CAND-A + CAND-B landed (`4186730`). Suite-standard `--json`/exit-code alignment (`ok:bool`, exit-1-on-findings, exit-2-tool-error) landed (`c9eaea4`, tas-0b56c632). Extract fidelity fix — fragment asset refs re-relativized to fragment depth — landed (`e69edc4`, tas-0ffcaf88).
 
 ## Active arc
 

@@ -11,7 +11,25 @@ Feature-complete, **no active sprint, no open blockers**. Build green, binary sh
 > (cargo bin precedes `~/.local/bin`). Ship to **both** after a build, or `which pagekit` runs stale.
 > This session shipped to both.
 
-## Latest session — suite exit-code/JSON standard adopted (2026-06-03, tas-0b56c632)
+## Latest session — extract fidelity fix (2026-06-03, tas-0ffcaf88, `e69edc4`)
+
+Class-A fidelity defect (finder: migrate seat, FIDELITY.md asedo #1): `pagekit extract` wrote
+each fragment's content verbatim from its dominant source page, so a block whose dominant variant
+came from a deep page (asedo posts at depth 2) baked `../../_assets/…` into `_fragments/navbar.html`
+(depth 1) — refs one dir too high when the fragment is opened/composed standalone. 0 deliverable
+impact (served pages always correct; marker insertion never rewrites in-page content).
+- **Fix:** track a representative source page per shared block; on write, rebase each **relative**
+  src/href/srcset (resolve vs source dir → lexical `..` normalize → re-express vs fragment dir, via
+  `pathdiff`). Robust to any source depth. **Root-absolute `/…` left untouched** — correct from any
+  depth + the sync `DepthRelativizer`'s job (this scoping also keeps the served-page flow intact).
+- New helpers in `src/extract.rs`: `relativize_asset_refs`/`rebase_ref`/`rebase_srcset`/
+  `lexically_normalize`/`is_skippable_ref`; `SharedBlock` gained a `source: PathBuf`.
+- Verified on REAL asedo.se (`../../_assets/…logo.png` → `../_assets/…`, zero `../../_assets/` left).
+  + regression test. **49 unit + 71 integ** green, clippy + fmt clean, binary reshipped to both paths.
+- **Migrate seat:** re-run `pagekit extract` / `migrate asedo.se` to regenerate fragments — on-disk
+  `_fragments/*.html` keep the old `../../` until re-extracted.
+
+## Earlier session — suite exit-code/JSON standard adopted (2026-06-03, tas-0b56c632)
 
 Coordinator-approved alignment to the published `fragments-sync` suite standard. **Breaking
 contract change** (pagekit is v0.1.0 unpublished, so it's the cheap side to move):
