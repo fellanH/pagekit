@@ -45,6 +45,35 @@ Phase 4 candidates (image dims, semantic variant naming, framework profiles, exp
 - **Broken-link check on `<meta>` social-card images** — `links`/`assets` now COUNT `og:image`/`twitter:image` content toward the reference graph (orphan-set only; commit `cd9b898`), but a meta image pointing at a *missing* file is not yet flagged broken. Absolute OG URLs are the spec norm (skipped as External), so only relative/root-absolute would be checked. **Trigger:** a consumer ships a broken social card via a relative og:image and wants it caught. See `todo/2026-06-02-dogfood-weknowaeo.md` (BUG-3).
 - **Orphan-exclusion mechanism (decision (a) trigger FIRED — do NOT just add a constant).** clone-a-website's `menubar.swift` (macOS source in the web root) is flagged orphan-asset because `.swift`/compiled-language sources aren't in `is_non_web_deployable()` (CAND-B covers scripting+shell+build only), AND the consumer created a `.assetsignore` expecting suppression — **pagekit doesn't honor it** (no such feature). This is the 5th whitelist false-positive (post CAND-B/PLATFORM_FILES/llms.txt/og:image), so it hits **Decisions (a) Policy-as-config**: the next whitelist edit should externalize the opinion, not add another hardcoded constant. Candidate mechanisms: (1) `[policy]` TOML block (decision (a)'s original prescription), or (2) **honor a gitignore-style `.assetsignore`** for orphan exclusions — cleaner/more mechanism-pure (opinion lives in the consumer's repo, not the binary), and the consumer already authored the file. **Leaning (2).** Relayed the `.assetsignore`-not-honored correction back to clone-a-website 2026-06-03. **Trigger to build:** a coordinator/Felix dispatch, or the next consumer to hit an orphan false-positive — not off this FYI receipt alone. Do NOT build speculatively.
 
+### Dogfood RE-AUDIT false-positive classes (clone-a-website funnel, 2026-06-03)
+
+Coordinator GREEN re-dispatch pointed the verify suite at clone-a-website's customer funnel (`app/`).
+**Result: the consumer surface is CLEAN** — prior fixes (`3e29f3d`) held, a11y PASS. Every residual
+finding traced to a **pagekit-side blind spot**, not a site defect. Relayed the honest "your funnel is
+audit-clean, these are ours" result back to clone-a-website. The 4 false-positive classes are pagekit's:
+
+- **FP-1 — `seo` doesn't skip `noindex` pages (NEW).** Flagged missing canonical/description as *errors*
+  on `/cloning.html` + `/__checkout/success/` — both carry `<meta name="robots" content="noindex">`.
+  Canonical/description are meaningless on noindex pages; flagging them is noise. **Fix:** `seo` should
+  skip (or downgrade) canonical/description rules when a page is `noindex`. **Trigger:** FIRED (consumer
+  noindex funnel pages mis-flagged). Highest-signal of the four — cheap, mechanism-pure, no policy needed.
+- **FP-2 — `links` doesn't model clean-URL rewriting (NEW).** Extensionless internal links (`href="/terms"`,
+  `/privacy`) flagged 404 because only `terms.html`/`privacy.html` exist on local FS; CF Pages serves them
+  (`.html` 308→clean, 200 in prod). **Fix candidate:** treat `/foo` as resolved if `foo.html` (or `foo/index.html`)
+  exists — opt-in or heuristic, since clean-URL is host-dependent. **Trigger:** FIRED (2nd consumer w/ CF clean URLs;
+  ettsmart.se pattern adjacent). Needs care — host-specific opinion, candidate for the `[policy]`/config seam.
+- **FP-3 — `.assetsignore` still not honored (orphan FP re-fired).** Same as the standing orphan-exclusion
+  item above — clone-a-website's `menubar.swift` re-flagged despite a correct `.assetsignore`. This is now the
+  **2nd distinct consumer-fire** of that trigger ("next consumer to hit an orphan false-positive"). Leaning
+  option (2): honor gitignore-style `.assetsignore`. Trigger condition for the build is now met on evidence.
+- **FP-4 — `preflight` check/doctor ERROR on non-fragments sites (NEW).** `app/` has no `_fragments/`, so
+  preflight's `check`+`doctor` stages hard-ERROR ("cannot read _fragments"). A site that simply doesn't use
+  fragments isn't *broken*. **Fix:** treat absent `_fragments/` as N/A/skip (not ERROR) in preflight. Cheap.
+
+**Disposition:** captured, NOT built — this was an audit+relay dispatch, not a pagekit-fix dispatch. FP-1 and
+FP-4 are cheap mechanism fixes with no policy implications; FP-2 + FP-3 touch the host-opinion/`[policy]` seam.
+Awaiting a coordinator/Felix pagekit-fix dispatch before building (do NOT build speculatively).
+
 ### Dogfood fix-candidates from knowledge-base audit (2026-06-02)
 
 Surfaced running the audit against `stormfors/knowledge-base`. Full detail + root cause in
